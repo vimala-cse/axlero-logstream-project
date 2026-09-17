@@ -15,6 +15,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <grpc.version>1.62.2</grpc.version>
     <protobuf.version>3.25.3</protobuf.version>
+    <lucene.version>9.10.0</lucene.version>
   </properties>
 
   <dependencies>
@@ -38,6 +39,23 @@
       <artifactId>annotations-api</artifactId>
       <version>6.0.53</version>
       <scope>provided</scope>
+    </dependency>
+
+    <!-- NEW for Week 2: Apache Lucene, the search engine library -->
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-core</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-analysis-common</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>${lucene.version}</version>
     </dependency>
   </dependencies>
 
