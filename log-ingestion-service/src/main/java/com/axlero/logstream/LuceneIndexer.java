@@ -144,4 +144,28 @@ public class LuceneIndexer {
         }
         return counts;
     }
+
+    // ===================== Week 4: alerting =====================
+
+    // How many ERROR-level logs happened in the last `withinMillis`
+    // milliseconds. Used by AlertMonitor to decide whether to raise
+    // an alert (too many errors, too recently = something is wrong).
+    public int countRecentErrors(long withinMillis) throws Exception {
+        long cutoff = System.currentTimeMillis() - withinMillis;
+        int count = 0;
+
+        try (DirectoryReader reader = DirectoryReader.open(directory)) {
+            IndexSearcher searcher = new IndexSearcher(reader);
+            for (int i = 0; i < reader.maxDoc(); i++) {
+                Document doc = searcher.doc(i);
+                String level = doc.get("level");
+                String tsStr = doc.get("timestamp_stored");
+                if ("ERROR".equals(level) && tsStr != null) {
+                    long ts = Long.parseLong(tsStr);
+                    if (ts >= cutoff) count++;
+                }
+            }
+        }
+        return count;
+    }
 }
