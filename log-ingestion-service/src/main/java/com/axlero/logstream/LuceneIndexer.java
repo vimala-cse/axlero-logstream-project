@@ -1,15 +1,18 @@
 package com.axlero.logstream;
 
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.core.KeywordAnalyzer;
+import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.*;
 import org.apache.lucene.index.*;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.*;
+import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 // This class is our "filing system". Every log that arrives gets
 // saved here in a special format that can be searched instantly,
@@ -24,11 +27,20 @@ public class LuceneIndexer {
     private static final String INDEX_DIR = "lucene-index";
 
     private final Directory directory;
-    private final StandardAnalyzer analyzer;
+    private final Analyzer analyzer;
 
     public LuceneIndexer() throws Exception {
         this.directory = FSDirectory.open(Path.of(INDEX_DIR));
-        this.analyzer = new StandardAnalyzer();
+
+        // IMPORTANT (fixes level:ERROR and service:payment-service returning
+        // nothing): "service" and "level" must be matched EXACTLY as typed
+        // in when indexed - no splitting words apart, no lowercasing. Only
+        // "message" should be broken into searchable words. So we use a
+        // different analyzer per field instead of one analyzer for everything.
+        Map<String, Analyzer> perField = new HashMap<>();
+        perField.put("service", new KeywordAnalyzer());
+        perField.put("level", new KeywordAnalyzer());
+        this.analyzer = new PerFieldAnalyzerWrapper(new StandardAnalyzer(), perField);
     }
 
     // Called every time a new log comes in. This "files" it away so
@@ -54,6 +66,8 @@ public class LuceneIndexer {
 
     // Runs a search query and returns matching logs as readable strings.
     // Example queries: "level:ERROR", "message:timeout", "service:payment-service"
+    // NOTE: level and service are case-sensitive exact match (type ERROR,
+    // not error - same case you sent it in).
     public List<String> search(String queryText, int maxResults) throws Exception {
         List<String> results = new ArrayList<>();
 
@@ -73,5 +87,61 @@ public class LuceneIndexer {
             }
         }
         return results;
+    }
+
+    // ===================== Week 3: aggregations =====================
+
+    // How many logs are indexed right now, in total.
+    public int getTotalLogs() throws Exception {
+        try (DirectoryReader reader = DirectoryReader.open(directory)) {
+            return reader.numDocs();
+        }
+    }
+
+    // Counts how many logs have each value of a given field.
+    // countByField("service") -> {payment-service=5, auth-service=3, ...}
+    // countByField("level")   -> {ERROR=6, INFO=5, WARN=2}
+    // Sorted with the highest count first - exactly what a bar chart wants.
+    public Map<String, Integer> countByField(String fieldName) throws Exception {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+
+        try (DirectoryReader reader = DirectoryReader.open(directory)) {
+            IndexSearcher searcher = new IndexSearcher(reader);
+            for (int i = 0; i < reader.maxDoc(); i++) {
+                Document doc = searcher.doc(i);
+                String value = doc.get(fieldName);
+                if (value != null) {
+                    counts.merge(value, 1, Integer::sum);
+                }
+            }
+        }
+
+        List<Map.Entry<String, Integer>> entries = new ArrayList<>(counts.entrySet());
+        entries.sort((a, b) -> b.getValue() - a.getValue());
+
+        Map<String, Integer> sorted = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> e : entries) sorted.put(e.getKey(), e.getValue());
+        return sorted;
+    }
+
+    // Groups logs into 1-minute buckets and counts how many fall into
+    // each bucket. This is what powers a "logs over time" line chart.
+    // Key = start of that minute (epoch millis), Value = count in that minute.
+    public Map<Long, Integer> countByMinute() throws Exception {
+        Map<Long, Integer> counts = new TreeMap<>();
+
+        try (DirectoryReader reader = DirectoryReader.open(directory)) {
+            IndexSearcher searcher = new IndexSearcher(reader);
+            for (int i = 0; i < reader.maxDoc(); i++) {
+                Document doc = searcher.doc(i);
+                String tsStr = doc.get("timestamp_stored");
+                if (tsStr != null) {
+                    long ts = Long.parseLong(tsStr);
+                    long minuteBucket = (ts / 60000L) * 60000L;
+                    counts.merge(minuteBucket, 1, Integer::sum);
+                }
+            }
+        }
+        return counts;
     }
 }
