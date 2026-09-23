@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="
+         http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ================================================= -->
+    <!-- SPRING BOOT                                       -->
+    <!-- ================================================= -->
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.13</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.logstream</groupId>
+    <artifactId>logstream</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+
+    <name>LogStream</name>
+    <description>
+        Distributed Log Analytics and Alerting Platform
+    </description>
+
+
+    <!-- ================================================= -->
+    <!-- PROPERTIES                                        -->
+    <!-- ================================================= -->
+
+    <properties>
+
+        <java.version>21</java.version>
+
+        <grpc.version>1.75.0</grpc.version>
+
+        <protobuf.version>3.25.8</protobuf.version>
+
+        <protobuf.plugin.version>0.6.1</protobuf.plugin.version>
+
+        <lucene.version>9.11.1</lucene.version>
+
+        <lombok.version>1.18.44</lombok.version>
+
+    </properties>
+
+
+    <!-- ================================================= -->
+    <!-- DEPENDENCY MANAGEMENT                             -->
+    <!-- ================================================= -->
+
+    <dependencyManagement>
+
+        <dependencies>
+
+            <!-- gRPC BOM -->
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-bom</artifactId>
+                <version>${grpc.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+        </dependencies>
+
+    </dependencyManagement>
+
+
+    <!-- ================================================= -->
+    <!-- DEPENDENCIES                                      -->
+    <!-- ================================================= -->
+
+    <dependencies>
+
+        <!-- ============================= -->
+        <!-- SPRING BOOT                   -->
+        <!-- ============================= -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+
+        <!-- Optional REST support -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+
+        <!-- ============================= -->
+        <!-- LOMBOK                        -->
+        <!-- ============================= -->
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <optional>true</optional>
+        </dependency>
+
+
+        <!-- ============================= -->
+        <!-- gRPC                          -->
+        <!-- ============================= -->
+
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-protobuf</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-stub</artifactId>
+        </dependency>
+
+
+        <!-- ============================= -->
+        <!-- PROTOBUF                       -->
+        <!-- ============================= -->
+
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf.version}</version>
+        </dependency>
+
+
+        <!-- ============================= -->
+        <!-- LUCENE                        -->
+        <!-- ============================= -->
+
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-core</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-analysis-common</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-queryparser</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+
+
+        <!-- ============================= -->
+        <!-- TESTING                        -->
+        <!-- ============================= -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+
+    <!-- ================================================= -->
+    <!-- BUILD                                             -->
+    <!-- ================================================= -->
+
+    <build>
+
+        <!-- ============================================= -->
+        <!-- OS DETECTION                                  -->
+        <!-- ============================================= -->
+
+        <extensions>
+
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>1.7.1</version>
+            </extension>
+
+        </extensions>
+
+
+        <plugins>
+
+            <!-- ========================================= -->
+            <!-- PROTOBUF + gRPC                           -->
+            <!-- ========================================= -->
+
+            <plugin>
+
+                <groupId>org.xolstice.maven.plugins</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+                <version>${protobuf.plugin.version}</version>
+
+                <configuration>
+
+                    <protocArtifact>
+                        com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}
+                    </protocArtifact>
+
+                    <pluginId>grpc-java</pluginId>
+
+                    <pluginArtifact>
+                        io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}
+                    </pluginArtifact>
+
+                </configuration>
+
+                <executions>
+
+                    <execution>
+
+                        <id>generate-protobuf</id>
+
+                        <phase>generate-sources</phase>
+
+                        <goals>
+
+                            <goal>compile</goal>
+
+                            <goal>compile-custom</goal>
+
+                        </goals>
+
+                    </execution>
+
+                </executions>
+
+            </plugin>
+
+
+            <!-- ========================================= -->
+            <!-- JAVA 21 COMPILER                          -->
+            <!-- ========================================= -->
+
+            <plugin>
+
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+
+                <configuration>
+
+                    <release>21</release>
+
+                    <annotationProcessorPaths>
+
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+
+                    </annotationProcessorPaths>
+
+                </configuration>
+
+            </plugin>
+
+
+            <!-- ========================================= -->
+            <!-- SPRING BOOT                               -->
+            <!-- ========================================= -->
+
+            <plugin>
+
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+
+            </plugin>
+
+
+            <!-- ========================================= -->
+            <!-- MOCK CLIENT                               -->
+            <!-- ========================================= -->
+
+            <plugin>
+
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+
+            </plugin>
+
+        </plugins>
+
+    </build>
+
+</project>
