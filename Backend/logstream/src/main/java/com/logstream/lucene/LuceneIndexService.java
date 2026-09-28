@@ -487,5 +487,71 @@ public class LuceneIndexService implements Closeable {
                     e
             );
         }
+        
+    }
+    public List<LogRecord> getAllLogs(int limit) {
+
+        List<LogRecord> records = new ArrayList<>();
+
+        try {
+
+            if (!DirectoryReader.indexExists(directory)) {
+                return records;
+            }
+
+            DirectoryReader reader = DirectoryReader.open(directory);
+
+            int total = Math.min(reader.numDocs(), limit);
+
+            for (int i = 0; i < total; i++) {
+
+                Document document = reader.document(i);
+
+                String timestamp = document.get("timestamp");
+                String level = document.get("level");
+                String service = document.get("service");
+                String message = document.get("message");
+                String traceId = document.get("trace_id");
+
+                String responseTimeText =
+                        document.get("response_time");
+
+                long responseTime = 0;
+
+                if (responseTimeText != null
+                        && !responseTimeText.isBlank()) {
+
+                    try {
+                        responseTime =
+                                Long.parseLong(responseTimeText);
+
+                    } catch (NumberFormatException e) {
+
+                        responseTime = 0;
+                    }
+                }
+
+                LogRecord record = LogRecord.builder()
+                        .timestamp(timestamp)
+                        .level(level)
+                        .service(service)
+                        .message(message)
+                        .traceId(traceId)
+                        .responseTime(responseTime)
+                        .build();
+
+                records.add(record);
+            }
+
+            reader.close();
+
+        } catch (Exception e) {
+
+            throw new LogStreamException(
+                    "Unable to read logs for analytics", e
+            );
+        }
+
+        return records;
     }
 }
