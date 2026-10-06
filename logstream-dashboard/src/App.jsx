@@ -3,6 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 // Change this if your backend (QueryApiServer) runs somewhere else.
 const API_BASE = 'http://localhost:8080'
 
+// NEW: Live Tail now connects directly to the WebSocket server
+// (LiveTailWebSocketServer, started inside LogIngestionServer) on
+// port 8081 - a different server/port than the REST API above.
+const LIVE_TAIL_WS_URL = 'ws://localhost:8081'
+
 function timeAgoLabel(epochMillis) {
   const d = new Date(epochMillis)
   return d.toLocaleTimeString()
@@ -18,7 +23,7 @@ export default function App() {
 
   const [liveLogs, setLiveLogs] = useState([])
   const [liveConnected, setLiveConnected] = useState(false)
-  const eventSourceRef = useRef(null)
+  const socketRef = useRef(null)
 
   const [query, setQuery] = useState('level:ERROR')
   const [loading, setLoading] = useState(true)
@@ -57,26 +62,30 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Live Tail: open a connection only while that tab is active, and
-  // always close it when leaving the tab (or closing the page) -
-  // otherwise the connection stays open in the background forever.
+  // Live Tail: open a WebSocket connection only while that tab is
+  // active, and always close it when leaving the tab (or closing the
+  // page) - otherwise the connection stays open in the background
+  // forever. Unlike the old SSE version, this connects to its own
+  // WebSocket server (port 8081) that pushes logs the instant they
+  // arrive at the backend - it never touches the Lucene index.
   useEffect(() => {
     if (activeTab !== 'Live Tail') {
       return
     }
 
     setLiveLogs([])
-    const es = new EventSource(`${API_BASE}/api/stream`)
-    eventSourceRef.current = es
+    const ws = new WebSocket(LIVE_TAIL_WS_URL)
+    socketRef.current = ws
 
-    es.onopen = () => setLiveConnected(true)
-    es.onmessage = (event) => {
+    ws.onopen = () => setLiveConnected(true)
+    ws.onmessage = (event) => {
       setLiveLogs((prev) => [event.data, ...prev].slice(0, 100))
     }
-    es.onerror = () => setLiveConnected(false)
+    ws.onerror = () => setLiveConnected(false)
+    ws.onclose = () => setLiveConnected(false)
 
     return () => {
-      es.close()
+      ws.close()
       setLiveConnected(false)
     }
   }, [activeTab])
