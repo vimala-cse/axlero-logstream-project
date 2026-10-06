@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // Change this if your backend (QueryApiServer) runs somewhere else.
 const API_BASE = 'http://localhost:8080'
@@ -16,12 +16,14 @@ export default function App() {
   const [alert, setAlert] = useState(null)
   const [logs, setLogs] = useState([])
 
+  const [liveLogs, setLiveLogs] = useState([])
+  const [liveConnected, setLiveConnected] = useState(false)
+  const eventSourceRef = useRef(null)
+
   const [query, setQuery] = useState('level:ERROR')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Loads everything the dashboard needs. Called once when the page
-  // opens, and again whenever the user runs a new search.
   async function loadAll(searchQuery) {
     setLoading(true)
     setError(null)
@@ -55,6 +57,30 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Live Tail: open a connection only while that tab is active, and
+  // always close it when leaving the tab (or closing the page) -
+  // otherwise the connection stays open in the background forever.
+  useEffect(() => {
+    if (activeTab !== 'Live Tail') {
+      return
+    }
+
+    setLiveLogs([])
+    const es = new EventSource(`${API_BASE}/api/stream`)
+    eventSourceRef.current = es
+
+    es.onopen = () => setLiveConnected(true)
+    es.onmessage = (event) => {
+      setLiveLogs((prev) => [event.data, ...prev].slice(0, 100))
+    }
+    es.onerror = () => setLiveConnected(false)
+
+    return () => {
+      es.close()
+      setLiveConnected(false)
+    }
+  }, [activeTab])
+
   function handleSearchKeyDown(e) {
     if (e.key === 'Enter') {
       loadAll(query)
@@ -67,9 +93,6 @@ export default function App() {
     return 'info'
   }
 
-  // Turns a raw search result string like:
-  // "[ERROR] payment-service: Payment gateway timeout (time: 123456)"
-  // into { level, service, message, time }
   function parseLogLine(line) {
     const match = line.match(/^\[(\w+)\]\s+([\w-]+):\s+(.*?)\s+\(time:\s+(\d+)\)$/)
     if (!match) return { level: 'INFO', service: '-', message: line, time: null }
@@ -90,16 +113,12 @@ export default function App() {
         <div className="brand">LogStream</div>
         <div className={`status ${alert?.active ? 'err' : 'ok'}`}>
           <span className="dot" />
-          {loading
-            ? 'Loading...'
-            : alert
-            ? alert.message
-            : 'Status unknown'}
+          {loading ? 'Loading...' : alert ? alert.message : 'Status unknown'}
         </div>
       </div>
 
       <div className="tabs">
-        {['Overview', 'Logs', 'Analytics', 'Alerts', 'Services'].map((tab) => (
+        {['Overview', 'Logs', 'Analytics', 'Alerts', 'Services', 'Live Tail'].map((tab) => (
           <div
             key={tab}
             className={`tab ${activeTab === tab ? 'active' : ''}`}
@@ -110,7 +129,7 @@ export default function App() {
         ))}
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && activeTab !== 'Live Tail' && <div className="error-banner">{error}</div>}
 
       {(activeTab === 'Overview' || activeTab === 'Logs') && (
         <div className="hero">
@@ -150,21 +169,15 @@ export default function App() {
               <span className="stat-word">total logs</span>
             </div>
             <div className="stat">
-              <span className="stat-num info mono">
-                {aggregations.byLevel.INFO || 0}
-              </span>
+              <span className="stat-num info mono">{aggregations.byLevel.INFO || 0}</span>
               <span className="stat-word">info</span>
             </div>
             <div className="stat">
-              <span className="stat-num warn mono">
-                {aggregations.byLevel.WARN || 0}
-              </span>
+              <span className="stat-num warn mono">{aggregations.byLevel.WARN || 0}</span>
               <span className="stat-word">warnings</span>
             </div>
             <div className="stat">
-              <span className="stat-num err mono">
-                {aggregations.byLevel.ERROR || 0}
-              </span>
+              <span className="stat-num err mono">{aggregations.byLevel.ERROR || 0}</span>
               <span className="stat-word">errors</span>
             </div>
           </div>
@@ -201,8 +214,7 @@ export default function App() {
 
       {activeTab === 'Logs' && (
         <div className="section-title">
-          {logs.length} result{logs.length === 1 ? '' : 's'} for{' '}
-          <span className="mono">{query}</span>
+          {logs.length} result{logs.length === 1 ? '' : 's'} for <span className="mono">{query}</span>
         </div>
       )}
       {activeTab === 'Logs' && (
@@ -256,6 +268,22 @@ export default function App() {
             ))}
           </tbody>
         </table>
+      )}
+
+      {activeTab === 'Live Tail' && (
+        <div>
+          <div className="section-title">
+            <span className={`live-dot ${liveConnected ? 'on' : 'off'}`} />
+            {liveConnected ? 'Live - streaming new logs as they arrive' : 'Connecting...'}
+          </div>
+          {liveLogs.length === 0 ? (
+            <div className="empty-note">
+              Waiting for new logs. Run BulkTestClient again to see them appear here instantly.
+            </div>
+          ) : (
+            <LogList logs={liveLogs} levelClass={levelClass} parseLogLine={parseLogLine} wide />
+          )}
+        </div>
       )}
     </div>
   )
@@ -321,9 +349,7 @@ function LogList({ logs, levelClass, parseLogLine, wide }) {
             </span>
             <span className="svc">{parsed.service}</span>
             <span className="msg">{parsed.message}</span>
-            <span className="time">
-              {parsed.time ? timeAgoLabel(parsed.time) : ''}
-            </span>
+            <span className="time">{parsed.time ? timeAgoLabel(parsed.time) : ''}</span>
           </div>
         )
       })}
