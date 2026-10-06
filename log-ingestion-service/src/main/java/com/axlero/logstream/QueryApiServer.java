@@ -163,6 +163,14 @@ public class QueryApiServer {
             } catch (IOException closed) {
                 // The browser closed the tab or navigated away - this is
                 // the normal way this loop ends, nothing to worry about.
+            } catch (InterruptedException interrupted) {
+                // The sleep between checks got interrupted (e.g. server
+                // shutting down) - safe to just stop the loop here.
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                // Something went wrong reading from the Lucene index -
+                // stop this stream rather than crash the whole server.
+                System.err.println("Live Tail stream error: " + e.getMessage());
             } finally {
                 try { os.close(); } catch (IOException ignored) { }
             }
