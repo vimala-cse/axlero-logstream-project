@@ -15,18 +15,16 @@ import java.util.concurrent.Executors;
 // This is the BRIDGE between our gRPC backend and the React frontend.
 //
 // Endpoints:
-//   GET /api/aggregations  -> Overview page: stat cards + service/level charts
-//   GET /api/search?q=...  -> Logs page: search / filter logs
-//   GET /api/timeline      -> Analytics page: "Log Volume" line chart
-//   GET /api/alerts        -> Alerts page: whether an alert is active
+//   GET /api/aggregations    -> Overview page: stat cards + service/level charts
+//   GET /api/search?q=...    -> Logs page: search / filter logs
+//   GET /api/timeline        -> Analytics page: "Log Volume" line chart
+//   GET /api/alerts          -> Alerts page: whether an alert is active right now
+//   GET /api/alerts/history  -> Alerts page: past alerts that have fired
 //
-// NOTE: Live Tail is NOT here anymore. It used to be a /api/stream
-// endpoint on this server that re-queried the Lucene index every
-// couple of seconds. It now runs on its own WebSocket server
-// (LiveTailWebSocketServer, port 8081, started inside
-// LogIngestionServer) which pushes new logs straight from gRPC
-// ingestion to the browser, bypassing the search index - see that
-// class for details.
+// NOTE: Live Tail does NOT go through this server anymore. It connects
+// directly to LiveTailWebSocketServer on port 8081, which pushes new
+// logs the instant they're ingested, bypassing Lucene entirely - see
+// LogIngestionServer.java and LiveTailWebSocketServer.java.
 public class QueryApiServer {
 
     private static final int ERROR_THRESHOLD = 3;
@@ -34,12 +32,33 @@ public class QueryApiServer {
 
     public static void main(String[] args) throws Exception {
         LuceneIndexer indexer = new LuceneIndexer();
+        AlertHistory alertHistory = new AlertHistory();
 
         String portEnv = System.getenv("PORT");
         int port = (portEnv != null) ? Integer.parseInt(portEnv) : 8080;
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+
+        // A thread pool so multiple requests can be handled at once,
+        // rather than one at a time on a single thread.
         server.setExecutor(Executors.newFixedThreadPool(10));
+
+        // Checks every 15 seconds whether an alert has just started
+        // firing, and records it if so. Runs for as long as the server
+        // runs, in the background.
+        Thread historyThread = new Thread(() -> {
+            while (true) {
+                try {
+                    int recentErrors = indexer.countRecentErrors(WINDOW_MINUTES * 60_000L);
+                    alertHistory.checkAndRecord(recentErrors, ERROR_THRESHOLD);
+                    Thread.sleep(15_000);
+                } catch (Exception e) {
+                    // Keep the loop alive even if one check fails.
+                }
+            }
+        });
+        historyThread.setDaemon(true);
+        historyThread.start();
 
         server.createContext("/api/search", exchange -> {
             addCorsHeaders(exchange);
@@ -92,7 +111,7 @@ public class QueryApiServer {
                 for (Map.Entry<Long, Integer> entry : byMinute.entrySet()) {
                     if (i++ > 0) sb.append(", ");
                     sb.append("{\"time\": ").append(entry.getKey())
-                            .append(", \"count\": ").append(entry.getValue()).append("}");
+                      .append(", \"count\": ").append(entry.getValue()).append("}");
                 }
                 sb.append("]");
                 json = sb.toString();
@@ -117,12 +136,21 @@ public class QueryApiServer {
                         + ", \"threshold\": " + ERROR_THRESHOLD
                         + ", \"windowMinutes\": " + WINDOW_MINUTES
                         + ", \"message\": \"" + (active
-                        ? recentErrors + " ERROR logs in the last " + WINDOW_MINUTES + " minutes"
-                        : "No active alerts") + "\"}";
+                            ? recentErrors + " ERROR logs in the last " + WINDOW_MINUTES + " minutes"
+                            : "No active alerts") + "\"}";
             } catch (Exception e) {
                 json = "{\"error\": \"" + e.getMessage() + "\"}";
             }
             sendJson(exchange, json);
+        });
+
+        server.createContext("/api/alerts/history", exchange -> {
+            addCorsHeaders(exchange);
+            if (exchange.getRequestMethod().equals("OPTIONS")) {
+                exchange.sendResponseHeaders(204, -1);
+                return;
+            }
+            sendJson(exchange, alertHistory.toJsonArray());
         });
 
         server.start();
