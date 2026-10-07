@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 
-// Change this if your backend (QueryApiServer) runs somewhere else.
-const API_BASE = 'http://localhost:8080'
-
-// NEW: Live Tail now connects directly to the WebSocket server
-// (LiveTailWebSocketServer, started inside LogIngestionServer) on
-// port 8081 - a different server/port than the REST API above.
-const LIVE_TAIL_WS_URL = 'ws://localhost:8081'
+// Change these if your backend runs somewhere else.
+const API_BASE = 'http://localhost:8080'   // QueryApiServer (REST)
+const WS_BASE = 'ws://localhost:8081'      // LiveTailWebSocketServer (Live Tail)
 
 function timeAgoLabel(epochMillis) {
   const d = new Date(epochMillis)
@@ -19,11 +15,12 @@ export default function App() {
   const [aggregations, setAggregations] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [alert, setAlert] = useState(null)
+  const [alertHistory, setAlertHistory] = useState([])
   const [logs, setLogs] = useState([])
 
   const [liveLogs, setLiveLogs] = useState([])
   const [liveConnected, setLiveConnected] = useState(false)
-  const socketRef = useRef(null)
+  const wsRef = useRef(null)
 
   const [query, setQuery] = useState('level:ERROR')
   const [loading, setLoading] = useState(true)
@@ -33,20 +30,22 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const [aggRes, timelineRes, alertRes, searchRes] = await Promise.all([
+      const [aggRes, timelineRes, alertRes, historyRes, searchRes] = await Promise.all([
         fetch(`${API_BASE}/api/aggregations`),
         fetch(`${API_BASE}/api/timeline`),
         fetch(`${API_BASE}/api/alerts`),
+        fetch(`${API_BASE}/api/alerts/history`),
         fetch(`${API_BASE}/api/search?q=${encodeURIComponent(searchQuery)}`),
       ])
 
-      if (!aggRes.ok || !timelineRes.ok || !alertRes.ok || !searchRes.ok) {
+      if (!aggRes.ok || !timelineRes.ok || !alertRes.ok || !historyRes.ok || !searchRes.ok) {
         throw new Error('Backend did not return a valid response')
       }
 
       setAggregations(await aggRes.json())
       setTimeline(await timelineRes.json())
       setAlert(await alertRes.json())
+      setAlertHistory(await historyRes.json())
       setLogs(await searchRes.json())
     } catch (err) {
       setError(
@@ -62,20 +61,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Live Tail: open a WebSocket connection only while that tab is
-  // active, and always close it when leaving the tab (or closing the
-  // page) - otherwise the connection stays open in the background
-  // forever. Unlike the old SSE version, this connects to its own
-  // WebSocket server (port 8081) that pushes logs the instant they
-  // arrive at the backend - it never touches the Lucene index.
+  // Live Tail: connects directly to LiveTailWebSocketServer (port 8081),
+  // NOT to QueryApiServer. Only while this tab is open - always closed
+  // when leaving the tab, so the connection doesn't stay open forever
+  // in the background.
   useEffect(() => {
     if (activeTab !== 'Live Tail') {
       return
     }
 
     setLiveLogs([])
-    const ws = new WebSocket(LIVE_TAIL_WS_URL)
-    socketRef.current = ws
+    const ws = new WebSocket(WS_BASE)
+    wsRef.current = ws
 
     ws.onopen = () => setLiveConnected(true)
     ws.onmessage = (event) => {
@@ -244,18 +241,42 @@ export default function App() {
       )}
 
       {activeTab === 'Alerts' && (
-        <div className="alert-box wide">
-          <div className={`alert-line ${alert?.active ? 'err' : 'ok'}`}>
-            <span className="dot" />
-            {alert?.active ? 'Alert active' : 'No active alerts'}
-          </div>
-          {alert?.active ? (
-            <div className="alert-sub">
-              {alert.errorCount} ERROR logs in the last {alert.windowMinutes} minutes -
-              threshold is {alert.threshold}
+        <div>
+          <div className="alert-box wide">
+            <div className={`alert-line ${alert?.active ? 'err' : 'ok'}`}>
+              <span className="dot" />
+              {alert?.active ? 'Alert active' : 'No active alerts'}
             </div>
+            {alert?.active ? (
+              <div className="alert-sub">
+                {alert.errorCount} ERROR logs in the last {alert.windowMinutes} minutes -
+                threshold is {alert.threshold}
+              </div>
+            ) : (
+              <div className="alert-sub">Error rate is within the normal range.</div>
+            )}
+          </div>
+
+          <div className="section-title" style={{ marginTop: 22 }}>Alert history</div>
+          {alertHistory.length === 0 ? (
+            <div className="empty-note">No alerts have fired yet.</div>
           ) : (
-            <div className="alert-sub">Error rate is within the normal range.</div>
+            <table className="service-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Error count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alertHistory.map((entry, i) => (
+                  <tr key={i}>
+                    <td className="mono">{timeAgoLabel(entry.time)}</td>
+                    <td className="mono">{entry.errorCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}
