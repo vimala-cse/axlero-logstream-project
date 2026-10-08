@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 // Change these if your backend runs somewhere else.
 const API_BASE = 'http://localhost:8080'   // QueryApiServer (REST)
@@ -7,6 +7,43 @@ const WS_BASE = 'ws://localhost:8081'      // LiveTailWebSocketServer (Live Tail
 function timeAgoLabel(epochMillis) {
   const d = new Date(epochMillis)
   return d.toLocaleTimeString()
+}
+
+// Small inline icons - no extra npm package needed. Each one just
+// draws simple shapes with the current text color, so it automatically
+// matches whatever color the tab/label around it already has.
+function Icon({ name, size = 15 }) {
+  const p = {
+    width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+    stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round',
+  }
+  switch (name) {
+    case 'overview':
+      return <svg {...p}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+    case 'logs':
+      return <svg {...p}><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="14" y2="18" /></svg>
+    case 'analytics':
+      return <svg {...p}><line x1="4" y1="20" x2="20" y2="20" /><rect x="6" y="10" width="3" height="8" /><rect x="11" y="6" width="3" height="12" /><rect x="16" y="13" width="3" height="5" /></svg>
+    case 'alerts':
+      return <svg {...p}><path d="M12 3a5 5 0 0 0-5 5v3.3L5 15h14l-2-3.7V8a5 5 0 0 0-5-5z" /><path d="M9.5 18a2.5 2.5 0 0 0 5 0" /></svg>
+    case 'services':
+      return <svg {...p}><rect x="3" y="4" width="18" height="6" rx="1" /><rect x="3" y="14" width="18" height="6" rx="1" /><circle cx="7" cy="7" r="0.6" fill="currentColor" /><circle cx="7" cy="17" r="0.6" fill="currentColor" /></svg>
+    case 'live':
+      return <svg {...p}><circle cx="12" cy="12" r="2.6" /><path d="M8.3 8.3a5.4 5.4 0 0 0 0 7.4" /><path d="M15.7 8.3a5.4 5.4 0 0 1 0 7.4" /></svg>
+    case 'search':
+      return <svg {...p}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+    default:
+      return null
+  }
+}
+
+const TAB_ICON = {
+  Overview: 'overview',
+  Logs: 'logs',
+  Analytics: 'analytics',
+  Alerts: 'alerts',
+  Services: 'services',
+  'Live Tail': 'live',
 }
 
 export default function App() {
@@ -116,7 +153,10 @@ export default function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <div className="brand">LogStream</div>
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          <span className="brand-text">LogStream</span>
+        </div>
         <div className={`status ${alert?.active ? 'err' : 'ok'}`}>
           <span className="dot" />
           {loading ? 'Loading...' : alert ? alert.message : 'Status unknown'}
@@ -130,7 +170,8 @@ export default function App() {
             className={`tab ${activeTab === tab ? 'active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab}
+            <Icon name={TAB_ICON[tab]} size={14} />
+            <span>{tab}</span>
           </div>
         ))}
       </div>
@@ -141,6 +182,7 @@ export default function App() {
         <div className="hero">
           <div className="hero-label">Search your logs</div>
           <div className="query-box">
+            <span className="search-icon"><Icon name="search" size={14} /></span>
             <span className="prompt">&gt;</span>
             <input
               className="query-input"
@@ -151,16 +193,14 @@ export default function App() {
             />
           </div>
           <div className="query-hint">
-            try{' '}
-            <span className="mono clickable" onClick={() => { setQuery('message:timeout'); loadAll('message:timeout') }}>
+            <span className="hint-label">try</span>
+            <span className="hint-chip mono" onClick={() => { setQuery('message:timeout'); loadAll('message:timeout') }}>
               message:timeout
             </span>
-            <i>·</i>
-            <span className="mono clickable" onClick={() => { setQuery('service:payment-service'); loadAll('service:payment-service') }}>
+            <span className="hint-chip mono" onClick={() => { setQuery('service:payment-service'); loadAll('service:payment-service') }}>
               service:payment-service
             </span>
-            <i>·</i>
-            <span className="mono clickable" onClick={() => { setQuery('level:WARN'); loadAll('level:WARN') }}>
+            <span className="hint-chip mono" onClick={() => { setQuery('level:WARN'); loadAll('level:WARN') }}>
               level:WARN
             </span>
           </div>
@@ -171,7 +211,7 @@ export default function App() {
         <>
           <div className="stat-strip">
             <div className="stat">
-              <span className="stat-num mono">{aggregations.totalLogs}</span>
+              <span className="stat-num total mono">{aggregations.totalLogs}</span>
               <span className="stat-word">total logs</span>
             </div>
             <div className="stat">
@@ -236,6 +276,9 @@ export default function App() {
           <div className="col-right">
             <div className="section-title">Logs by service</div>
             <ServiceBars byService={aggregations.byService} max={maxServiceCount} />
+
+            <div className="section-title" style={{ marginTop: 26 }}>Logs by level</div>
+            <LevelBars byLevel={aggregations.byLevel} />
           </div>
         </div>
       )}
@@ -320,6 +363,7 @@ export default function App() {
 }
 
 function Sparkline({ timeline, max, big }) {
+  const gradientId = useId()
   if (!timeline || timeline.length === 0) {
     return <div className="empty-note">No timeline data yet - send some logs first.</div>
   }
@@ -333,12 +377,52 @@ function Sparkline({ timeline, max, big }) {
       return `${x.toFixed(1)},${y.toFixed(1)}`
     })
     .join(' ')
+  const areaPoints = `0,${height} ${points} ${width},${height}`
 
   return (
     <div className="spark-wrap">
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0B7285" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#0B7285" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={areaPoints} fill={`url(#${gradientId})`} />
         <polyline fill="none" stroke="#0B7285" strokeWidth="1.75" points={points} />
       </svg>
+    </div>
+  )
+}
+
+function LevelBars({ byLevel }) {
+  const order = ['ERROR', 'WARN', 'INFO']
+  const colors = { ERROR: '#b3261e', WARN: '#9c6b12', INFO: '#46618c' }
+  const total = order.reduce((sum, level) => sum + (byLevel[level] || 0), 0) || 1
+
+  return (
+    <div>
+      <div className="stack-bar">
+        {order.map((level) =>
+          byLevel[level] ? (
+            <div
+              key={level}
+              className="stack-seg"
+              style={{ width: `${(byLevel[level] / total) * 100}%`, background: colors[level] }}
+            />
+          ) : null
+        )}
+      </div>
+      <div>
+        {order.map((level) =>
+          byLevel[level] ? (
+            <div className="legend-item" key={level}>
+              <span className="dot2" style={{ background: colors[level] }} />
+              {level} - {byLevel[level]} ({Math.round((byLevel[level] / total) * 100)}%)
+            </div>
+          ) : null
+        )}
+      </div>
     </div>
   )
 }
