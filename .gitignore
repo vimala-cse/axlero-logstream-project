@@ -42,3 +42,6 @@ target/
 # IDE files
 .idea/
 *.iml
+
+# Ignore generated Lucene index files
+Backend/logstream/data/lucene-index/
