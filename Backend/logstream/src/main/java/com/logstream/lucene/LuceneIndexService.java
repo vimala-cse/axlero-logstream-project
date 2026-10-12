@@ -13,11 +13,14 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.Sort;
+import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.Directory;
@@ -207,7 +210,7 @@ public class LuceneIndexService implements Closeable {
         }
 
         int safeLimit =
-                Math.max(1, Math.min(limit, 100));
+                Math.max(1, Math.min(limit, 500));
 
         try {
 
@@ -309,7 +312,7 @@ public class LuceneIndexService implements Closeable {
         }
     }
 
-    private Query buildQuery(String searchText) {
+        private Query buildQuery(String searchText) throws org.apache.lucene.queryparser.classic.ParseException {
 
         String[] clauses =
                 searchText.split("(?i)\\s+AND\\s+");
@@ -401,39 +404,18 @@ public class LuceneIndexService implements Closeable {
                 } else if (field.equals("message")) {
 
                     builder.add(
-                            new TermQuery(
-                                    new Term(
-                                            "message",
-                                            value.toLowerCase()
-                                    )
-                            ),
+                                                        new QueryParser("message", analyzer).parse(QueryParser.escape(value)),
                             BooleanClause.Occur.MUST
                     );
 
                 } else {
 
-                    builder.add(
-                            new TermQuery(
-                                    new Term(
-                                            "message",
-                                            clause
-                                    )
-                            ),
-                            BooleanClause.Occur.MUST
-                    );
+                                        builder.add(textOrMetadataQuery(clause), BooleanClause.Occur.MUST);
                 }
 
             } else {
 
-                builder.add(
-                        new TermQuery(
-                                new Term(
-                                        "message",
-                                        clause.toLowerCase()
-                                )
-                        ),
-                        BooleanClause.Occur.MUST
-                );
+                                builder.add(textOrMetadataQuery(clause), BooleanClause.Occur.MUST);
             }
         }
 
@@ -441,6 +423,19 @@ public class LuceneIndexService implements Closeable {
 
         return builder.build();
     }
+
+        private Query textOrMetadataQuery(String value)
+                        throws org.apache.lucene.queryparser.classic.ParseException {
+                BooleanQuery.Builder matches = new BooleanQuery.Builder();
+                matches.add(
+                                new QueryParser("message", analyzer).parse(QueryParser.escape(value)),
+                                BooleanClause.Occur.SHOULD
+                );
+                matches.add(new TermQuery(new Term("service", value)), BooleanClause.Occur.SHOULD);
+                matches.add(new TermQuery(new Term("level", value.toUpperCase(java.util.Locale.ROOT))), BooleanClause.Occur.SHOULD);
+                matches.add(new TermQuery(new Term("traceId", value)), BooleanClause.Occur.SHOULD);
+                return matches.build();
+        }
 
     public synchronized long getDocumentCount() {
 
@@ -489,69 +484,50 @@ public class LuceneIndexService implements Closeable {
         }
         
     }
-    public List<LogRecord> getAllLogs(int limit) {
+        public synchronized List<LogRecord> getAllLogs(int limit) {
 
-        List<LogRecord> records = new ArrayList<>();
-
-        try {
-
-            if (!DirectoryReader.indexExists(directory)) {
-                return records;
-            }
-
-            DirectoryReader reader = DirectoryReader.open(directory);
-
-            int total = Math.min(reader.numDocs(), limit);
-
-            for (int i = 0; i < total; i++) {
-
-                Document document = reader.document(i);
-
-                String timestamp = document.get("timestamp");
-                String level = document.get("level");
-                String service = document.get("service");
-                String message = document.get("message");
-                String traceId = document.get("trace_id");
-
-                String responseTimeText =
-                        document.get("response_time");
-
-                long responseTime = 0;
-
-                if (responseTimeText != null
-                        && !responseTimeText.isBlank()) {
-
-                    try {
-                        responseTime =
-                                Long.parseLong(responseTimeText);
-
-                    } catch (NumberFormatException e) {
-
-                        responseTime = 0;
-                    }
+                if (limit <= 0) {
+                        return List.of();
                 }
 
-                LogRecord record = LogRecord.builder()
-                        .timestamp(timestamp)
-                        .level(level)
-                        .service(service)
-                        .message(message)
-                        .traceId(traceId)
-                        .responseTime(responseTime)
-                        .build();
+                try {
+                        writer.commit();
 
-                records.add(record);
-            }
+                        try (DirectoryReader reader = DirectoryReader.open(writer)) {
+                                if (reader.numDocs() == 0) {
+                                        return List.of();
+                                }
 
-            reader.close();
+                                IndexSearcher searcher = new IndexSearcher(reader);
+                                int safeLimit = Math.min(reader.numDocs(), limit);
+                                var topDocs = searcher.search(
+                                                new MatchAllDocsQuery(),
+                                                safeLimit,
+                                                new Sort(new SortField(null, SortField.Type.DOC, true))
+                                );
+                                List<LogRecord> records = new ArrayList<>(topDocs.scoreDocs.length);
 
-        } catch (Exception e) {
+                                for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
+                                        Document document = searcher.doc(scoreDoc.doc);
+                                        var responseTimeField = document.getField("response_time");
+                                        Number responseTimeValue = responseTimeField == null
+                                                        ? null
+                                                        : responseTimeField.numericValue();
 
-            throw new LogStreamException(
-                    "Unable to read logs for analytics", e
-            );
+                                        records.add(LogRecord.builder()
+                                                        .timestamp(document.get("timestamp"))
+                                                        .level(document.get("level"))
+                                                        .service(document.get("service"))
+                                                        .message(document.get("message"))
+                                                        .traceId(document.get("traceId"))
+                                                        .responseTime(responseTimeValue == null ? 0 : responseTimeValue.longValue())
+                                                        .build());
+                                }
+
+                                return records;
+                        }
+                } catch (Exception e) {
+                        throw new LogStreamException("Unable to read logs for analytics", e);
+                }
         }
-
-        return records;
-    }
 }
