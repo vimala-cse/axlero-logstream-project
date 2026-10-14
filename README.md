@@ -249,7 +249,7 @@ below as the clear next step.
 | Doni Navaneeth | Backend |
 | Shoyab Ahamed | Frontend |
 
-## 12. Deployment
+
 
 Planned on [Render](https://render.com) — backend as a Docker web
 service, frontend as a static site. Docker setup is ready; this
