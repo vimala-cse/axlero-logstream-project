@@ -281,12 +281,6 @@ re-point at a deployed backend later.
 | Shoyab Ahamad R | Frontend |
 | Samata Pradip Chougule | Testing |
 
-## 11. Deployment
-
-Planned on [Render](https://render.com) — backend as a Docker web
-service, frontend as a static site. Docker setup is ready; this
-section will be updated with live URLs once deployed.
-
 ## 12. Future Improvements
 
 - Persisting logs somewhere durable across restarts (currently the
