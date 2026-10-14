@@ -249,12 +249,6 @@ below as the clear next step.
 | Doni Navaneeth | Backend |
 | Shoyab Ahamed | Frontend |
 
-
-
-Planned on [Render](https://render.com) — backend as a Docker web
-service, frontend as a static site. Docker setup is ready; this
-section will be updated with live URLs once deployed.
-
 ## 13. Future Improvements
 
 - **User-defined alert rules** — let someone configure their own
