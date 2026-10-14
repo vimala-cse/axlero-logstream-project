@@ -1,0 +1,83 @@
+{
+  "info": {
+    "name": "LogStream API",
+    "description": "REST endpoints exposed by QueryApiServer - the bridge between the LogStream backend (gRPC + Lucene) and the React dashboard. Live Tail is not included here since it's a WebSocket connection (ws://localhost:8081), not a REST call Postman can send the same way.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get aggregations (Overview page)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/aggregations",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "aggregations"]
+        },
+        "description": "Total log count, plus counts grouped by service and by level. Powers the stat cards and bar charts on the Overview and Analytics pages."
+      }
+    },
+    {
+      "name": "Search logs",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/search?q=level:ERROR",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "search"],
+          "query": [
+            {
+              "key": "q",
+              "value": "level:ERROR",
+              "description": "Try: level:ERROR, message:timeout, service:payment-service"
+            }
+          ]
+        },
+        "description": "Runs a search against the Lucene index and returns matching logs. Powers the search bar on the Overview and Logs pages."
+      }
+    },
+    {
+      "name": "Get timeline (log volume)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/timeline",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "timeline"]
+        },
+        "description": "Log counts grouped into 1-minute buckets. Powers the \"Log volume\" line chart on the Overview and Analytics pages."
+      }
+    },
+    {
+      "name": "Get current alert status",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/alerts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "alerts"]
+        },
+        "description": "Whether an alert is active right now (more than 3 ERROR logs in the last 5 minutes), plus the current error count. Powers the alert banner and the Alerts page."
+      }
+    },
+    {
+      "name": "Get alert history",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/alerts/history",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "alerts", "history"]
+        },
+        "description": "A list of past moments when an alert started firing, with the error count at that time. Powers the \"Alert history\" table on the Alerts page."
+      }
+    }
+  ]
+}
