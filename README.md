@@ -277,8 +277,9 @@ re-point at a deployed backend later.
 | Name | Role |
 |---|---|
 | **Vimala** (Team Lead) | Backend (gRPC, Lucene, aggregations, alerting, alert rules, webhook notifications, Live Tail, REST bridge), Frontend dashboard, Testing |
-| Doni Navaneeth | Backend |
-| Shoyab Ahamed | Frontend |
+| Doni Navaneeth Reddy | Backend |
+| Shoyab Ahamad R | Frontend |
+| Samata Pradip Chougule | Testing |
 
 ## 11. Deployment
 
