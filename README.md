@@ -57,11 +57,20 @@ send a webhook notification when a rule becomes active.
 | Full-text & field search | Apache Lucene index; query by level, service, or free-text message |
 | Live analytics | Total logs, per-service and per-level breakdowns, volume-over-time chart |
 | Built-in alert | Background check flags when the global error rate crosses a fixed threshold |
-| **User-defined alert rules** | Create any number of custom rules — per service, per log level, with your own threshold and time window |
+| **User-defined alert rules** | Configure service and level filters with a count threshold and time window; rules are checked every 15 seconds |
 | **Optional webhook alerts** | A Slack/Discord webhook notification is sent when a configured rule becomes active; set `ALERT_WEBHOOK_URL` to enable it |
 | Alert history | Past alerts (both built-in and rule-based) are saved and viewable, not just the current moment |
 | Live Tail | Newly ingested logs are pushed to connected clients over WebSocket; there is no historical backfill |
 | REST API + Postman collection | REST endpoints support the dashboard; the collection contains five core GET requests |
+### Current implementation compared with the project brief
+
+The brief describes a target system. The current repository implements a smaller prototype, so these brief requirements are not yet supported or performance-verified:
+
+- The gRPC `LogEntry` contains service, level, message, and timestamp fields. It has no structured `response_time` field, so a filter such as `response_time > 1000` is not currently supported.
+- Search returns at most 50 results per request. The repository has no benchmark demonstrating ingestion of millions of lines per minute or millisecond query latency.
+- Custom alerts filter by service and level, then compare a count with a threshold over a time window. They do not run arbitrary user-defined query expressions. The background worker checks every 15 seconds.
+- Optional Slack/Discord webhook notifications are implemented. Email notifications are not.
+- The dashboard uses React and Vite, but the project does not include ECharts; the charts are implemented in the dashboard code.
 
 ## 4. Architecture
 
