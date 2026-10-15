@@ -1,8 +1,8 @@
 # LogStream — Distributed Log Analytics & Alerting Platform
 
-A self-hosted log analytics tool that ingests logs from multiple
-services in real time, indexes them for instant search, visualizes
-trends on a live dashboard, and flags unusual error activity — built
+A local prototype for log analytics. It accepts logs over gRPC, indexes
+them with Apache Lucene, and displays search results, basic analytics,
+alerts, and a live stream in a React dashboard. This project was built
 as part of the Axlero Solutions internship (Project 2: Observability
 & Big Data).
 
@@ -11,27 +11,23 @@ as part of the Axlero Solutions internship (Project 2: Observability
 ## 1. The Problem
 
 Modern systems are made up of many small services, and each one
-produces its own stream of logs. Storing and searching through
-terabytes of these logs using a standard relational database (like
-PostgreSQL) doesn't scale — a single keyword search can mean scanning
-every row. Organizations need something that can take in millions of
-log lines per minute, index them instantly, and surface problems the
-moment they happen — the same idea behind tools like the ELK stack
-(Elasticsearch, Logstash, Kibana), built here from scratch.
+produces its own stream of logs. Storing and searching large volumes
+of logs efficiently can be challenging.
+This project explores a small part of the observability workflow with
+gRPC ingestion, Lucene indexing, a dashboard, and alert checks. It is a
+learning prototype, not a production-scale replacement for platforms
+such as the ELK stack (Elasticsearch, Logstash, Kibana).
 
 ## 2. Our Solution — How It Works End to End
 
 1. **A service produces a log** (e.g. `payment-service` logs an
    `ERROR: Payment gateway timeout`).
 2. That log is sent to our **gRPC ingestion server**
-   (`LogIngestionServer`), which is built for fast, high-volume,
-   binary log ingestion.
+   (`LogIngestionServer`) using Protocol Buffers.
 3. The log is immediately:
-   - **Indexed into Apache Lucene** (the same search engine that
-     powers Elasticsearch) so it becomes instantly searchable, and
-   - **Pushed live to any open dashboard** over a WebSocket, for the
-     Live Tail feature — this path skips the index entirely, so it's
-     never delayed by search traffic.
+   - **Indexed into Apache Lucene** so it can be searched, and
+   - **Sent to connected Live Tail clients** over a separate WebSocket
+     connection. This stream does not read from the search index.
 4. An engineer opens the **React dashboard**, which talks to the
    backend through a REST bridge (`QueryApiServer`). From here they
    can:
@@ -39,35 +35,33 @@ moment they happen — the same idea behind tools like the ELK stack
      `level:ERROR AND service:payment-service`
    - View stat cards and charts — total logs, breakdown by service,
      breakdown by level, volume over time
-   - Watch a background process check the recent error rate; if it
-     crosses a fixed threshold, an alert appears on the dashboard and
-     is saved to a history log
+   - View the built-in alert status; a background check records a history
+     entry when the error count crosses its fixed threshold
    - **Define their own alert rules** — any service (or all of them),
      any log level, any threshold and time window — instead of relying
      on just the one fixed rule
-   - Get **notified outside the dashboard**: the moment a custom rule
-     fires, a message is posted to a Slack or Discord webhook, so the
-     alert isn't missed just because nobody is looking at the screen
-   - Watch new logs stream onto the **Live Tail** page the instant
-     they arrive, with no refresh needed
+   - Get an optional **Slack or Discord webhook notification** when a
+     custom rule changes from inactive to active
+   - Watch new logs stream onto the **Live Tail** page while connected,
+     with no manual refresh needed
 
-That's the whole loop: a log is born in a microservice, and within
-moments it's searchable, visualized, checked against every alert rule
-— and, if it crosses one, someone is notified.
+That's the whole loop: a log is sent by a service, indexed, and made
+searchable in the dashboard. Configured rules check recent logs and can
+send a webhook notification when a rule becomes active.
 
 ## 3. Key Features
 
 | Feature | Description |
 |---|---|
-| High-throughput ingestion | gRPC server built for fast, binary log ingestion from multiple services |
+| gRPC ingestion | Receives log entries from clients over gRPC using Protocol Buffers |
 | Full-text & field search | Apache Lucene index; query by level, service, or free-text message |
 | Live analytics | Total logs, per-service and per-level breakdowns, volume-over-time chart |
 | Built-in alert | Background check flags when the global error rate crosses a fixed threshold |
 | **User-defined alert rules** | Create any number of custom rules — per service, per log level, with your own threshold and time window |
-| **Real webhook alerts** | The moment a custom rule fires, a message is sent to a Slack/Discord webhook — not just shown in the UI |
+| **Optional webhook alerts** | A Slack/Discord webhook notification is sent when a configured rule becomes active; set `ALERT_WEBHOOK_URL` to enable it |
 | Alert history | Past alerts (both built-in and rule-based) are saved and viewable, not just the current moment |
-| Live Tail | Logs stream to the dashboard in real time via WebSocket, bypassing the search index |
-| REST API + Postman collection | Every piece of data the dashboard shows is also available as a documented REST endpoint |
+| Live Tail | Newly ingested logs are pushed to connected clients over WebSocket; there is no historical backfill |
+| REST API + Postman collection | REST endpoints support the dashboard; the collection contains five core GET requests |
 
 ## 4. Architecture
 
@@ -111,22 +105,20 @@ moments it's searchable, visualized, checked against every alert rule
 ```
 
 **Why does Live Tail bypass the search index?** Browsers can't speak
-gRPC, so everything the dashboard needs normally goes through
-`QueryApiServer`, which reads from Lucene. But Live Tail needs to feel
-instant and must never be slowed down by search traffic — so instead
-of polling the index, `LogIngestionServer` pushes each log straight to
-connected browsers the moment it's received, over a separate
-WebSocket connection. Search and Live Tail never compete with each
-other.
+gRPC, so dashboard queries go through `QueryApiServer`, which reads
+from Lucene. Live Tail uses a separate WebSocket connection:
+`LogIngestionServer` sends each newly ingested log directly to connected
+browsers. It shows logs received while the client is connected and does
+not backfill previously indexed logs.
 
 **How alert rules differ from the built-in alert:** the built-in alert
 (`AlertHistory`) is one fixed, global rule and can't be changed without
 editing code. User-defined rules (`AlertRuleStore`) are created from
 the dashboard itself, each scoped to a service and level with its own
-threshold and window, and are checked by a separate background thread
-every 15 seconds. The moment a rule crosses from "fine" to "alert", it's
-recorded in `RuleAlertHistory` **and** `WebhookNotifier` fires a real
-notification — independent of whether the dashboard is even open.
+threshold and window, and are checked by a background thread every 15
+seconds. When a rule changes from inactive to active, it is recorded in
+`RuleAlertHistory`; `WebhookNotifier` sends a notification if
+`ALERT_WEBHOOK_URL` is set. These checks run in `QueryApiServer`.
 
 ## 5. Tech Stack
 
@@ -181,30 +173,31 @@ axlero-logstream-project/
 ### Prerequisites
 
 - Java 17+ (21 also works)
-- Maven (handled automatically by IntelliJ)
+- Maven 3.6+ (or an IDE with Maven support)
 - Node.js and npm
 
 ### Step 1 — Start the backend
 
-Open `log-ingestion-service` as a Maven project and run these three
-files **in this order**, leaving each one running:
+Open `log-ingestion-service` as a Maven project in your IDE. Run these
+classes in order. Keep the ingestion and REST servers running:
 
 1. `LogIngestionServer.java` — starts the gRPC server (port 9090) and
    the Live Tail WebSocket server (port 8081)
 2. `BulkTestClient.java` — sends 15 sample logs across 6 services and
-   3 levels (run once; run again any time for more sample data)
-3. `QueryApiServer.java` — starts the REST API (port 8080) —
-   **keep this running**
+   3 levels, then exits (run again to add more sample data)
+3. `QueryApiServer.java` — starts the REST API (default port 8080) and
+   background alert checks — **keep this running**
 
 Confirm it's working: open `http://localhost:8080/api/aggregations`
-in a browser — you should see JSON data.
+in a browser. The response should contain JSON counts. `QueryApiServer`
+uses port 8080 by default; set the `PORT` environment variable to use
+a different port.
 
 **Optional — enable real webhook alerts:** before running
 `QueryApiServer`, set an environment variable
-`ALERT_WEBHOOK_URL` to a Slack or Discord incoming-webhook URL (Run →
-Edit Configurations → Environment Variables, in IntelliJ). If it's not
-set, everything still works — rule alerts just won't be posted
-anywhere outside the dashboard.
+`ALERT_WEBHOOK_URL` to a Slack or Discord incoming-webhook URL (Run → Edit Configurations → Environment Variables in IntelliJ). If
+it isn't set, webhook notifications are skipped; rule evaluation and
+in-dashboard history still work.
 
 ### Step 2 — Start the frontend
 
@@ -239,16 +232,17 @@ message instead of a blank page.
 | GET | `/api/alerts` | Whether the built-in global alert is active right now |
 | GET | `/api/alerts/history` | Past built-in alerts that have fired |
 | GET | `/api/alert-rules` | List every user-defined alert rule |
-| POST | `/api/alert-rules` | Create a rule — body: `{"service", "level", "threshold", "windowMinutes"}` (`service` optional, defaults to any) |
+| POST | `/api/alert-rules` | Create a rule — JSON body example: `{"service":"*","level":"ERROR","threshold":5,"windowMinutes":5}` (`service` and `level` default to `*` and `ERROR` if omitted) |
 | DELETE | `/api/alert-rules?id=<id>` | Delete a rule |
 | GET | `/api/alert-rules/history` | Past alerts fired by user-defined rules |
 | WS | `ws://localhost:8081` | Live Tail — pushes each new log the instant it's received |
 
-A ready-made **Postman collection** for the REST endpoints is at
-`postman/LogStream.postman_collection.json`. Import it into Postman
-and every request is pre-filled — no typing URLs by hand. It uses a
-`baseUrl` variable (default `http://localhost:8080`) so it's easy to
-re-point at a deployed backend later.
+A ready-made **Postman collection** is at
+`postman/LogStream.postman_collection.json`. It includes five core GET
+requests (aggregations, search, timeline, current alert, and alert
+history). The alert-rule endpoints are documented above but are not
+included in that collection. It uses `baseUrl` (default
+`http://localhost:8080`).
 
 ## 9. Week-by-Week Development Plan
 
@@ -281,8 +275,9 @@ re-point at a deployed backend later.
 | Shoyab Ahamad R | Frontend |
 | Samata Pradip Chougule | Testing |
 
-## 12. Future Improvements
+## 11. Future Improvements
 
-- Persisting logs somewhere durable across restarts (currently the
-  Lucene index and alert files live on local disk)
+- Persisting logs somewhere durable across restarts (the Lucene index and
+  alert history/rule files are stored locally, relative to the process
+  working directory)
 - Role-based access, if this were ever used by more than one team
