@@ -430,6 +430,8 @@ export default function App() {
                   <input
                       type="number"
                       min="1"
+                      step="1"
+                      required
                       className="mono"
                       value={newRule.threshold}
                       onChange={(e) => setNewRule({ ...newRule, threshold: e.target.value })}
@@ -440,7 +442,10 @@ export default function App() {
                   <input
                       type="number"
                       min="1"
+                      step="1"
+                      required
                       className="mono"
+                      max="10080"
                       value={newRule.windowMinutes}
                       onChange={(e) => setNewRule({ ...newRule, windowMinutes: e.target.value })}
                   />

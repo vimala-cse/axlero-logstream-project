@@ -200,6 +200,7 @@ public class QueryApiServer {
                 return;
             }
             String json;
+            int statusCode = 200;
             try {
                 if (method.equals("GET")) {
                     json = ruleStore.toJsonArray();
@@ -209,8 +210,10 @@ public class QueryApiServer {
                     String level = extractJsonString(body, "level");
                     Integer threshold = extractJsonInt(body, "threshold");
                     Integer windowMinutes = extractJsonInt(body, "windowMinutes");
-                    if (threshold == null || windowMinutes == null) {
-                        json = "{\"error\": \"threshold and windowMinutes are required\"}";
+                    String validationError = validateAlertRule(body, service, level, threshold, windowMinutes);
+                    if (validationError != null) {
+                        statusCode = 400;
+                        json = "{\"error\": \"" + validationError + "\"}";
                     } else {
                         AlertRule created = ruleStore.add(service, level, threshold, windowMinutes);
                         json = created.toJson();
@@ -225,7 +228,7 @@ public class QueryApiServer {
             } catch (Exception e) {
                 json = "{\"error\": \"" + e.getMessage() + "\"}";
             }
-            sendJson(exchange, json);
+            sendJson(exchange, json, statusCode);
         });
 
         // NEW: history of user-defined rule alerts that have fired.
@@ -273,8 +276,45 @@ public class QueryApiServer {
     }
 
     private static Integer extractJsonInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*(-?\\d+)").matcher(json);
-        return m.find() ? Integer.valueOf(m.group(1)) : null;
+        Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*(-?\\d+)(?=\\s*[,}])").matcher(json);
+        if (!m.find()) return null;
+        try {
+            return Integer.valueOf(m.group(1));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String validateAlertRule(String json, String service, String level,
+                                            Integer threshold, Integer windowMinutes) {
+        if (threshold == null || windowMinutes == null) {
+            return "threshold and windowMinutes must be integers";
+        }
+        if (threshold < 1) {
+            return "threshold must be at least 1";
+        }
+        if (windowMinutes < 1 || windowMinutes > 10_080) {
+            return "windowMinutes must be between 1 and 10080";
+        }
+        if (hasJsonField(json, "service") && service == null) {
+            return "service must be a string";
+        }
+        if (service != null && !service.isBlank() && !"*".equals(service)
+                && !service.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")) {
+            return "service must use letters, numbers, dots, underscores, or hyphens";
+        }
+        if (hasJsonField(json, "level") && level == null) {
+            return "level must be a string";
+        }
+        if (level != null && !level.isBlank()
+                && !level.matches("[A-Za-z][A-Za-z0-9_-]{0,31}")) {
+            return "level must start with a letter and contain only letters, numbers, underscores, or hyphens";
+        }
+        return null;
+    }
+
+    private static boolean hasJsonField(String json, String key) {
+        return Pattern.compile("\"" + key + "\"\\s*:").matcher(json).find();
     }
 
     private static void addCorsHeaders(HttpExchange exchange) {
@@ -284,9 +324,13 @@ public class QueryApiServer {
     }
 
     private static void sendJson(HttpExchange exchange, String json) throws IOException {
+        sendJson(exchange, json, 200);
+    }
+
+    private static void sendJson(HttpExchange exchange, String json, int statusCode) throws IOException {
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.sendResponseHeaders(statusCode, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
         }
