@@ -5,7 +5,7 @@ The LogStream dashboard is a React 18 application built with Vite. It reads log 
 ## Features
 
 - **Overview** — log totals, counts by level and service, timeline, recent logs, and current built-in alert status.
-- **Logs** — search indexed logs with Lucene query syntax.
+- **Logs** — search indexed logs with Lucene query syntax, including numeric `response_time` filters in milliseconds.
 - **Analytics** — charts for log volume, services, and levels.
 - **Alerts** — built-in alert status and history, custom rules, and rule alert history.
 - **Services** — log counts grouped by service.
@@ -61,4 +61,4 @@ src/
 
 - If the REST backend is unavailable, the dashboard displays a connection error.
 - Webhook notifications are configured on the backend with `ALERT_WEBHOOK_URL`; they do not require the dashboard to remain open.
-- Alert rules currently filter by service and log level with a count threshold and time window. They are not arbitrary query expressions.
+- Alert rules currently filter by service and log level with a count threshold and time window. They are not arbitrary query expressions. Log search also supports one numeric `response_time` comparison per query, for example `service:billing-api AND response_time > 1000`. Values are milliseconds.

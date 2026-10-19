@@ -19,12 +19,12 @@ public class BulkTestClient {
                 LogIngestionServiceGrpc.newBlockingStub(channel);
 
         sendLog(stub, "payment-service", "ERROR", "Connection timeout");
-        sendLog(stub, "payment-service", "ERROR", "Payment gateway timeout");
+        sendLog(stub, "payment-service", "ERROR", "Payment gateway timeout", 1800L);
         sendLog(stub, "payment-service", "INFO", "Payment processed successfully");
         sendLog(stub, "auth-service", "INFO", "User login successful");
         sendLog(stub, "auth-service", "INFO", "User logout successful");
         sendLog(stub, "auth-service", "WARN", "Repeated failed login attempt");
-        sendLog(stub, "billing-api", "ERROR", "Database query failed");
+        sendLog(stub, "billing-api", "ERROR", "Database query failed", 1450L);
         sendLog(stub, "billing-api", "INFO", "Invoice generated");
         sendLog(stub, "inventory-service", "WARN", "Stock running low");
         sendLog(stub, "inventory-service", "INFO", "Stock updated");
@@ -39,14 +39,19 @@ public class BulkTestClient {
 
     private static void sendLog(LogIngestionServiceGrpc.LogIngestionServiceBlockingStub stub,
                                  String service, String level, String message) {
-        LogEntry entry = LogEntry.newBuilder()
+        sendLog(stub, service, level, message, null);
+    }
+
+    private static void sendLog(LogIngestionServiceGrpc.LogIngestionServiceBlockingStub stub,
+                                 String service, String level, String message, Long responseTimeMs) {
+        LogEntry.Builder entry = LogEntry.newBuilder()
                 .setServiceName(service)
                 .setLevel(level)
                 .setMessage(message)
-                .setTimestamp(System.currentTimeMillis())
-                .build();
+                .setTimestamp(System.currentTimeMillis());
+        if (responseTimeMs != null) entry.setResponseTimeMs(responseTimeMs);
 
-        LogAck ack = stub.sendLog(entry);
+        LogAck ack = stub.sendLog(entry.build());
         System.out.println("Sent [" + level + "] " + service + ": " + message + " -> acknowledged: " + ack.getReceived());
     }
 }

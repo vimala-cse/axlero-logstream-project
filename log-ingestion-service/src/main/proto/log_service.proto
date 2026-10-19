@@ -10,6 +10,7 @@ message LogEntry {
   string level = 2;
   string message = 3;
   int64 timestamp = 4;
+  optional int64 response_time_ms = 5;
 }
 
 message LogAck {

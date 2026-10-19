@@ -39,9 +39,11 @@ public class LogIngestionServer {
 
         @Override
         public void sendLog(LogEntry request, StreamObserver<LogAck> responseObserver) {
+            String responseTimeSuffix = request.hasResponseTimeMs()
+                    ? " (response_time: " + request.getResponseTimeMs() + " ms)" : "";
             String formattedLine = "[" + request.getLevel() + "] "
                     + request.getServiceName() + ": " + request.getMessage()
-                    + " (time: " + request.getTimestamp() + ")";
+                    + responseTimeSuffix + " (time: " + request.getTimestamp() + ")";
 
             System.out.println(formattedLine);
 
@@ -51,7 +53,8 @@ public class LogIngestionServer {
                         request.getServiceName(),
                         request.getLevel(),
                         request.getMessage(),
-                        request.getTimestamp()
+                        request.getTimestamp(),
+                        request.hasResponseTimeMs() ? request.getResponseTimeMs() : null
                 );
             } catch (Exception e) {
                 System.out.println("Warning: failed to index log - " + e.getMessage());

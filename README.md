@@ -109,9 +109,10 @@ level:ERROR
 service:payment-service
 message:timeout
 level:ERROR AND service:payment-service
+service:billing-api AND response_time > 1000
 ```
 
-The search endpoint returns up to 50 matching logs per request. The current log schema has no structured `response_time` field, so numeric filters such as `response_time > 1000` are not supported.
+The search endpoint returns up to 50 matching logs per request. `response_time` is an optional numeric field measured in milliseconds. Filter it with `>`, `>=`, `<`, `<=`, or `=`, alone or alongside other filters using `AND`. Only one `response_time` comparison is supported per query.
 
 ## REST API
 
@@ -152,7 +153,7 @@ The project brief describes a larger target system. This repository currently im
 | Brief item | Current implementation |
 |---|---|
 | Ingest millions of log lines per minute and return search results in milliseconds | Performance has not been benchmarked; no throughput or latency claim is made here. |
-| Search on `response_time`, for example `response_time > 1000` | The schema stores service, level, message, and timestamp only; there is no structured response-time field. |
+| Search on `response_time`, for example `response_time > 1000` | Supported as an optional numeric field in milliseconds; combine with other filters using `AND`. |
 | Run user-defined query rules every minute | Rules filter by service and level and count matches in a time window. Checks run every 15 seconds; arbitrary query expressions are not supported. |
 | Send webhooks or emails | Optional Slack/Discord webhooks are implemented. Email notifications are not. |
 | React dashboard with ECharts | The UI uses React and Vite. The project does not include ECharts; charts are implemented in the dashboard code. |
@@ -168,7 +169,7 @@ The project brief describes a larger target system. This repository currently im
 
 ## Possible next steps
 
-- Add a structured `response_time` field to the log schema and index it.
+- Add response-time comparisons to saved alert-rule expressions.
 - Support saved alert query expressions and align the evaluation interval with the project brief.
 - Add email notifications and evaluate an ECharts-based dashboard if those remain project requirements.
 - Benchmark ingestion throughput and search latency before making scale claims.
