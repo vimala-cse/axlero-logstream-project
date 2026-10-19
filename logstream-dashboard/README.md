@@ -1,72 +1,64 @@
-# LogStream Dashboard (React + live backend data)
+# LogStream Dashboard
 
-This is a working version of the design I showed you - not just a
-picture, actual React code that fetches real data from your backend
-and updates the page.
+The LogStream dashboard is a React 18 application built with Vite. It reads log data from the Java REST API and shows new incoming logs through a WebSocket connection.
 
-## What it does
+## Features
 
-- **Overview tab** - stat numbers, a log-volume line chart, logs by
-  service, recent logs, and the alert status - all live from your backend
-- **Logs tab** - full search: type a query, press Enter, see matching logs
-- **Analytics tab** - bigger versions of the volume chart and service chart
-- **Alerts tab** - shows whether an alert is currently active
-- **Services tab** - a simple table of services and their log counts
-- **Mobile responsive** - resize the browser narrow (or open on a phone) and
-  the layout stacks into one column instead of two
-- **Hover states** - tabs, log rows, the search box, and the example query
-  chips all respond when you hover/click them
+- **Overview** — log totals, counts by level and service, timeline, recent logs, and current built-in alert status.
+- **Logs** — search indexed logs with Lucene query syntax.
+- **Analytics** — charts for log volume, services, and levels.
+- **Alerts** — built-in alert status and history, custom rules, and rule alert history.
+- **Services** — log counts grouped by service.
+- **Live Tail** — new logs pushed to the browser while the page is connected. Older logs are not backfilled into this view.
 
-## Before you run this
+## Requirements
 
-Your backend must be running first:
-1. `LogIngestionServer.java` (port 9090)
-2. `BulkTestClient.java` (to have some sample logs)
-3. `QueryApiServer.java` (port 8080) - use the version from the
-   `final-polish-update.zip` I sent earlier, it has the `/api/timeline`
-   and `/api/alerts` endpoints this dashboard needs
+- Node.js and npm
+- The LogStream backend running locally:
+  - `LogIngestionServer.java` provides gRPC on port `9090` and WebSocket on port `8081`.
+  - `QueryApiServer.java` provides the REST API on port `8080` by default.
 
-If `QueryApiServer` is not running, you'll see a red error message at
-the top of the page instead of data - that's expected, just start it.
+To populate the dashboard, run `BulkTestClient.java` after starting `LogIngestionServer.java`. Then start `QueryApiServer.java`. Keep both servers running while using the dashboard.
 
-## How to run
+## Start the dashboard
 
-```
+From this directory, run:
+
+```bash
 npm install
 npm run dev
 ```
 
-Then open the link it shows (usually `http://localhost:5173`).
+Open the local URL printed by Vite, usually `http://localhost:5173`.
 
-## If your backend runs on a different address
+To build the static frontend bundle, run:
 
-Open `src/App.jsx`, change this line near the top:
+```bash
+npm run build
+```
+
+## Backend addresses
+
+The local backend addresses are set near the top of `src/App.jsx`:
+
 ```js
 const API_BASE = 'http://localhost:8080'
+const WS_BASE = 'ws://localhost:8081'
 ```
 
-## Project structure
+Update both values if the backend runs at different addresses. The backend REST server must allow the dashboard origin through CORS.
 
-```
+## Project files
+
+```text
 src/
-  App.jsx      - all the logic: fetching data, search, the 5 tabs
-  App.css      - all the styling, including mobile responsiveness
-  main.jsx     - just mounts App into the page (you won't need to touch this)
+├── App.jsx      Dashboard pages, data fetching, and WebSocket handling
+├── App.css      Layout and responsive styles
+└── main.jsx     React entry point
 ```
 
-## For the team
+## Notes
 
-Show this to everyone as the reference for how the frontend should
-look and behave. If you want to add a new section or page:
-1. Add a new tab name to the array in the `tabs` section of `App.jsx`
-2. Add a new `{activeTab === 'YourTab' && ( ... )}` block below the
-   existing ones, using the same data (`aggregations`, `timeline`,
-   `alert`, `logs`) that's already being fetched
-
-## Push to GitHub
-
-```
-git add .
-git commit -m "Frontend: working dashboard connected to backend APIs"
-git push origin vimala
-```
+- If the REST backend is unavailable, the dashboard displays a connection error.
+- Webhook notifications are configured on the backend with `ALERT_WEBHOOK_URL`; they do not require the dashboard to remain open.
+- Alert rules currently filter by service and log level with a count threshold and time window. They are not arbitrary query expressions.
