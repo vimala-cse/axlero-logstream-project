@@ -200,10 +200,16 @@ export default function App() {
   }
 
   function parseLogLine(line) {
-    const match = line.match(/^\[(\w+)\]\s+([\w-]+):\s+(.*?)\s+\(time:\s+(\d+)\)$/)
-    if (!match) return { level: 'INFO', service: '-', message: line, time: null }
-    const [, level, service, message, time] = match
-    return { level, service, message, time: Number(time) }
+    const match = line.match(/^\[(\w+)\]\s+([\w-]+):\s+(.*?)(?:\s+\(response_time:\s+(\d+) ms\))?\s+\(time:\s+(\d+)\)$/)
+    if (!match) return { level: 'INFO', service: '-', message: line, responseTimeMs: null, time: null }
+    const [, level, service, message, responseTimeMs, time] = match
+    return {
+      level,
+      service,
+      message,
+      responseTimeMs: responseTimeMs == null ? null : Number(responseTimeMs),
+      time: Number(time),
+    }
   }
 
   const maxServiceCount = aggregations
@@ -262,6 +268,9 @@ export default function App() {
             </span>
                 <span className="hint-chip mono" onClick={() => { setQuery('service:payment-service'); loadAll('service:payment-service') }}>
               service:payment-service
+            </span>
+                <span className="hint-chip mono" onClick={() => { setQuery('response_time > 1000'); loadAll('response_time > 1000') }}>
+              response_time &gt; 1000
             </span>
                 <span className="hint-chip mono" onClick={() => { setQuery('level:WARN'); loadAll('level:WARN') }}>
               level:WARN
@@ -430,6 +439,8 @@ export default function App() {
                   <input
                       type="number"
                       min="1"
+                      step="1"
+                      required
                       className="mono"
                       value={newRule.threshold}
                       onChange={(e) => setNewRule({ ...newRule, threshold: e.target.value })}
@@ -440,7 +451,10 @@ export default function App() {
                   <input
                       type="number"
                       min="1"
+                      step="1"
+                      required
                       className="mono"
+                      max="10080"
                       value={newRule.windowMinutes}
                       onChange={(e) => setNewRule({ ...newRule, windowMinutes: e.target.value })}
                   />
@@ -614,7 +628,7 @@ function LogList({ logs, levelClass, parseLogLine, wide }) {
             </span>
                 <span className="svc">{parsed.service}</span>
                 <span className="msg">{parsed.message}</span>
-                <span className="time">{parsed.time ? timeAgoLabel(parsed.time) : ''}</span>
+                <span className="time">{parsed.responseTimeMs == null ? '' : `${parsed.responseTimeMs} ms · `}{parsed.time ? timeAgoLabel(parsed.time) : ''}</span>
               </div>
           )
         })}

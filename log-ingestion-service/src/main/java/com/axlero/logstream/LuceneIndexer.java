@@ -13,6 +13,8 @@ import org.apache.lucene.store.FSDirectory;
 
 import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 // This class is our "filing system". Every log that arrives gets
 // saved here in a special format that can be searched instantly,
@@ -20,6 +22,9 @@ import java.util.*;
 public class LuceneIndexer {
 
     private static final String INDEX_DIR = "lucene-index";
+    private static final Pattern RESPONSE_TIME_FILTER = Pattern.compile(
+            "\\bresponse_time\\s*(>=|>|<=|<|=)\\s*(\\d+)(?=\\s|$|\\))",
+            Pattern.CASE_INSENSITIVE);
 
     private final Directory directory;
     private final Analyzer analyzer;
@@ -33,7 +38,7 @@ public class LuceneIndexer {
         this.analyzer = new PerFieldAnalyzerWrapper(new StandardAnalyzer(), perField);
     }
 
-    public void addLog(String serviceName, String level, String message, long timestamp) throws Exception {
+    public void addLog(String serviceName, String level, String message, long timestamp, Long responseTimeMs) throws Exception {
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
         try (IndexWriter writer = new IndexWriter(directory, config)) {
             Document doc = new Document();
@@ -42,6 +47,11 @@ public class LuceneIndexer {
             doc.add(new TextField("message", message, Field.Store.YES));
             doc.add(new LongPoint("timestamp", timestamp));
             doc.add(new StoredField("timestamp_stored", timestamp));
+            if (responseTimeMs != null) {
+                if (responseTimeMs < 0) throw new IllegalArgumentException("response_time_ms must not be negative");
+                doc.add(new LongPoint("response_time", responseTimeMs));
+                doc.add(new StoredField("response_time_stored", responseTimeMs));
+            }
             writer.addDocument(doc);
         }
     }
@@ -51,7 +61,7 @@ public class LuceneIndexer {
         try (DirectoryReader reader = DirectoryReader.open(directory)) {
             IndexSearcher searcher = new IndexSearcher(reader);
             QueryParser parser = new QueryParser("message", analyzer);
-            Query query = parser.parse(queryText);
+            Query query = parseSearchQuery(parser, queryText);
             TopDocs topDocs = searcher.search(query, maxResults);
             for (ScoreDoc sd : topDocs.scoreDocs) {
                 Document doc = searcher.doc(sd.doc);
@@ -59,6 +69,57 @@ public class LuceneIndexer {
             }
         }
         return results;
+    }
+
+    private Query parseSearchQuery(QueryParser parser, String queryText) throws Exception {
+        Matcher matcher = RESPONSE_TIME_FILTER.matcher(queryText);
+        if (!matcher.find()) {
+            if (queryText.toLowerCase(Locale.ROOT).contains("response_time")) {
+                throw new IllegalArgumentException("Use response_time followed by >, >=, <, <=, or = and a number of milliseconds");
+            }
+            return parser.parse(queryText);
+        }
+        String operator = matcher.group(1);
+        long value;
+        try {
+            value = Long.parseLong(matcher.group(2));
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("response_time value is too large", e);
+        }
+        if (matcher.find()) {
+            throw new IllegalArgumentException("Only one response_time comparison is supported per search");
+        }
+        if (Pattern.compile("\\bOR\\b", Pattern.CASE_INSENSITIVE).matcher(queryText).find()) {
+            throw new IllegalArgumentException("Combine response_time comparisons with other filters using AND");
+        }
+
+        Matcher location = RESPONSE_TIME_FILTER.matcher(queryText);
+        location.find();
+        int filterStart = location.start();
+        int filterEnd = location.end();
+        String before = queryText.substring(0, filterStart).replaceFirst("(?i)\\s+AND\\s*$", "").trim();
+        String after = queryText.substring(filterEnd).replaceFirst("(?i)^\\s*AND\\s+", "").trim();
+        String textQuery = before.isEmpty() ? after : after.isEmpty() ? before : before + " AND " + after;
+
+        BooleanQuery.Builder combined = new BooleanQuery.Builder();
+        if (!textQuery.isEmpty()) combined.add(parser.parse(textQuery), BooleanClause.Occur.MUST);
+        combined.add(responseTimeQuery(operator, value), BooleanClause.Occur.MUST);
+        return combined.build();
+    }
+
+    private Query responseTimeQuery(String operator, long value) {
+        return switch (operator) {
+            case ">" -> value == Long.MAX_VALUE
+                    ? new MatchNoDocsQuery()
+                    : LongPoint.newRangeQuery("response_time", value + 1, Long.MAX_VALUE);
+            case ">=" -> LongPoint.newRangeQuery("response_time", value, Long.MAX_VALUE);
+            case "<" -> value == 0
+                    ? new MatchNoDocsQuery()
+                    : LongPoint.newRangeQuery("response_time", 0, value - 1);
+            case "<=" -> LongPoint.newRangeQuery("response_time", 0, value);
+            case "=" -> LongPoint.newExactQuery("response_time", value);
+            default -> throw new IllegalArgumentException("Unsupported response_time comparison: " + operator);
+        };
     }
 
     public int getTotalLogs() throws Exception {
@@ -174,9 +235,11 @@ public class LuceneIndexer {
     }
 
     private String formatLine(Document doc) {
+        String responseTime = doc.get("response_time_stored");
         return "[" + doc.get("level") + "] "
                 + doc.get("service") + ": "
                 + doc.get("message")
+                + (responseTime == null ? "" : " (response_time: " + responseTime + " ms)")
                 + " (time: " + doc.get("timestamp_stored") + ")";
     }
 }
