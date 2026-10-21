@@ -48,6 +48,7 @@ public class LogIngestionServer {
             System.out.println(formattedLine);
 
             // Save this log so it becomes searchable later (Week 2).
+            boolean indexed = false;
             try {
                 indexer.addLog(
                         request.getServiceName(),
@@ -56,6 +57,7 @@ public class LogIngestionServer {
                         request.getTimestamp(),
                         request.hasResponseTimeMs() ? request.getResponseTimeMs() : null
                 );
+                indexed = true;
             } catch (Exception e) {
                 System.out.println("Warning: failed to index log - " + e.getMessage());
             }
@@ -63,9 +65,11 @@ public class LogIngestionServer {
             // NEW: push this log straight to any connected Live Tail
             // browsers, right now - this does NOT go through Lucene at
             // all, which is why it shows up with no search delay.
-            liveTail.broadcast(formattedLine);
+            if (indexed) {
+                liveTail.broadcast(formattedLine);
+            }
 
-            LogAck ack = LogAck.newBuilder().setReceived(true).build();
+            LogAck ack = LogAck.newBuilder().setReceived(indexed).build();
             responseObserver.onNext(ack);
             responseObserver.onCompleted();
         }
