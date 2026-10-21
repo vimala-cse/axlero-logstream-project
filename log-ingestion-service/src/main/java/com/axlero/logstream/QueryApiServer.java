@@ -1,5 +1,7 @@
 package com.axlero.logstream;
 
+import org.apache.lucene.queryparser.classic.ParseException;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -105,14 +107,18 @@ public class QueryApiServer {
                 return;
             }
             String json;
+            int statusCode = 200;
             try {
                 String query = getQueryParam(exchange, "q");
                 List<String> results = indexer.search(query == null ? "*:*" : query, 50);
                 json = toJsonArray(results);
+            } catch (IllegalArgumentException | ParseException e) {
+                statusCode = 400;
+                json = jsonError(e);
             } catch (Exception e) {
                 json = jsonError(e);
             }
-            sendJson(exchange, json);
+            sendJson(exchange, json, statusCode);
         });
 
         server.createContext("/api/aggregations", exchange -> {
