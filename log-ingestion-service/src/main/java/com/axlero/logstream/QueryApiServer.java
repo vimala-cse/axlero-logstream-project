@@ -110,7 +110,7 @@ public class QueryApiServer {
                 List<String> results = indexer.search(query == null ? "*:*" : query, 50);
                 json = toJsonArray(results);
             } catch (Exception e) {
-                json = "{\"error\": \"" + e.getMessage() + "\"}";
+                json = jsonError(e);
             }
             sendJson(exchange, json);
         });
@@ -130,7 +130,7 @@ public class QueryApiServer {
                         + ", \"byService\": " + toJsonObject(byService)
                         + ", \"byLevel\": " + toJsonObject(byLevel) + "}";
             } catch (Exception e) {
-                json = "{\"error\": \"" + e.getMessage() + "\"}";
+                json = jsonError(e);
             }
             sendJson(exchange, json);
         });
@@ -154,7 +154,7 @@ public class QueryApiServer {
                 sb.append("]");
                 json = sb.toString();
             } catch (Exception e) {
-                json = "{\"error\": \"" + e.getMessage() + "\"}";
+                json = jsonError(e);
             }
             sendJson(exchange, json);
         });
@@ -177,7 +177,7 @@ public class QueryApiServer {
                         ? recentErrors + " ERROR logs in the last " + WINDOW_MINUTES + " minutes"
                         : "No active alerts") + "\"}";
             } catch (Exception e) {
-                json = "{\"error\": \"" + e.getMessage() + "\"}";
+                json = jsonError(e);
             }
             sendJson(exchange, json);
         });
@@ -213,7 +213,7 @@ public class QueryApiServer {
                     String validationError = validateAlertRule(body, service, level, threshold, windowMinutes);
                     if (validationError != null) {
                         statusCode = 400;
-                        json = "{\"error\": \"" + validationError + "\"}";
+                        json = "{\"error\": " + jsonString(validationError) + "}";
                     } else {
                         AlertRule created = ruleStore.add(service, level, threshold, windowMinutes);
                         json = created.toJson();
@@ -223,10 +223,11 @@ public class QueryApiServer {
                     boolean removed = id != null && ruleStore.remove(id);
                     json = "{\"removed\": " + removed + "}";
                 } else {
+                    statusCode = 405;
                     json = "{\"error\": \"Unsupported method\"}";
                 }
             } catch (Exception e) {
-                json = "{\"error\": \"" + e.getMessage() + "\"}";
+                json = jsonError(e);
             }
             sendJson(exchange, json, statusCode);
         });
@@ -328,7 +329,7 @@ public class QueryApiServer {
     }
 
     private static void sendJson(HttpExchange exchange, String json, int statusCode) throws IOException {
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(statusCode, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
@@ -340,7 +341,7 @@ public class QueryApiServer {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < items.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append("\"").append(items.get(i).replace("\"", "\\\"")).append("\"");
+            sb.append(jsonString(items.get(i)));
         }
         sb.append("]");
         return sb.toString();
@@ -351,9 +352,35 @@ public class QueryApiServer {
         int i = 0;
         for (Map.Entry<String, Integer> entry : map.entrySet()) {
             if (i++ > 0) sb.append(", ");
-            sb.append("\"").append(entry.getKey()).append("\": ").append(entry.getValue());
+            sb.append(jsonString(entry.getKey())).append(": ").append(entry.getValue());
         }
         sb.append("}");
         return sb.toString();
+    }
+
+    private static String jsonError(Exception error) {
+        String message = error.getMessage();
+        return "{\"error\": " + jsonString(message == null ? "Unexpected server error" : message) + "}";
+    }
+
+    private static String jsonString(String value) {
+        StringBuilder escaped = new StringBuilder("\"");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> escaped.append("\\\"");
+                case '\\' -> escaped.append("\\\\");
+                case '\b' -> escaped.append("\\b");
+                case '\f' -> escaped.append("\\f");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (c < 0x20) escaped.append(String.format("\\u%04x", (int) c));
+                    else escaped.append(c);
+                }
+            }
+        }
+        return escaped.append('"').toString();
     }
 }
