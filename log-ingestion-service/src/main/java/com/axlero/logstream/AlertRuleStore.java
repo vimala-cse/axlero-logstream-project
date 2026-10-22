@@ -3,8 +3,10 @@ package com.axlero.logstream;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -66,12 +68,31 @@ public class AlertRuleStore {
     }
 
     private void save() {
-        try (BufferedWriter writer = Files.newBufferedWriter(Path.of(FILE_NAME), StandardCharsets.UTF_8)) {
-            for (AlertRule rule : new ArrayList<>(rules)) {
-                writer.write(rule.toCsvLine());
-                writer.newLine();
+        Path target = Path.of(FILE_NAME).toAbsolutePath();
+        Path temporary = null;
+        try {
+            temporary = Files.createTempFile(target.getParent(), "alert-rules-", ".tmp");
+            try (BufferedWriter writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                for (AlertRule rule : new ArrayList<>(rules)) {
+                    writer.write(rule.toCsvLine());
+                    writer.newLine();
+                }
             }
-        } catch (IOException ignored) {
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            System.out.println("Warning: failed to save alert rules - " + e.getMessage());
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // The next save can safely replace a leftover temporary file.
+                }
+            }
         }
     }
 }
