@@ -37,9 +37,13 @@ public class AlertRule {
     }
 
     public static AlertRule fromCsvLine(String line) {
-        String[] p = line.split(",");
+        String[] p = line.split(",", -1);
         if (p.length != 5) return null;
-        return new AlertRule(p[0], p[1], p[2], Integer.parseInt(p[3]), Integer.parseInt(p[4]));
+        try {
+            return new AlertRule(p[0], p[1], p[2], Integer.parseInt(p[3]), Integer.parseInt(p[4]));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     public String toJson() {
