@@ -112,11 +112,11 @@ export default function App() {
         fetch(`${API_BASE}/api/alert-rules`),
         fetch(`${API_BASE}/api/alert-rules/history`),
       ])
-      if (rulesRes.ok) setRules(await rulesRes.json())
-      if (ruleHistoryRes.ok) setRuleHistory(await ruleHistoryRes.json())
-    } catch (err) {
-      // loadAll's error banner already covers backend-unreachable cases.
-    }
+      if (!rulesRes.ok || !ruleHistoryRes.ok) {
+        throw new Error('Could not refresh alert rules')
+      }
+      setRules(await rulesRes.json())
+      setRuleHistory(await ruleHistoryRes.json())
   }
 
   async function createRule(e) {
@@ -148,11 +148,16 @@ export default function App() {
   }
 
   async function deleteRule(id) {
+    setRuleError(null)
     try {
-      await fetch(`${API_BASE}/api/alert-rules?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const res = await fetch(`${API_BASE}/api/alert-rules?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error || data.removed !== true) {
+        throw new Error(data.error || 'Could not delete the rule')
+      }
       await loadRules()
     } catch (err) {
-      setRuleError('Could not delete the rule')
+      setRuleError(err.message || 'Could not delete the rule')
     }
   }
 
@@ -404,7 +409,7 @@ export default function App() {
                     {rules.map((rule) => (
                         <div className="rule-row" key={rule.id}>
                           <span className="rule-desc mono">{rule.description}</span>
-                          <span className="rule-remove" onClick={() => deleteRule(rule.id)}>Remove</span>
+                          <button type="button" className="rule-remove" onClick={() => deleteRule(rule.id)}>Remove</button>
                         </div>
                     ))}
                   </div>
