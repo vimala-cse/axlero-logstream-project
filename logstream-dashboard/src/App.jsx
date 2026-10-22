@@ -107,16 +107,15 @@ export default function App() {
   // NEW: load just the rules + rule history (used after add/delete, so we
   // don't have to re-run the search query and the rest of loadAll).
   async function loadRules() {
-    try {
-      const [rulesRes, ruleHistoryRes] = await Promise.all([
-        fetch(`${API_BASE}/api/alert-rules`),
-        fetch(`${API_BASE}/api/alert-rules/history`),
-      ])
-      if (!rulesRes.ok || !ruleHistoryRes.ok) {
-        throw new Error('Could not refresh alert rules')
-      }
-      setRules(await rulesRes.json())
-      setRuleHistory(await ruleHistoryRes.json())
+    const [rulesRes, ruleHistoryRes] = await Promise.all([
+      fetch(`${API_BASE}/api/alert-rules`),
+      fetch(`${API_BASE}/api/alert-rules/history`),
+    ])
+    if (!rulesRes.ok || !ruleHistoryRes.ok) {
+      throw new Error('Could not refresh alert rules')
+    }
+    setRules(await rulesRes.json())
+    setRuleHistory(await ruleHistoryRes.json())
   }
 
   async function createRule(e) {
