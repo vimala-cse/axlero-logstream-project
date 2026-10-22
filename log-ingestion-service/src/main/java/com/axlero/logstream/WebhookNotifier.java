@@ -26,8 +26,8 @@ public class WebhookNotifier {
             return;
         }
         try {
-            String escaped = message.replace("\\", "\\\\").replace("\"", "\\\"");
-            String json = "{\"text\": \"" + escaped + "\", \"content\": \"" + escaped + "\"}";
+            String quotedMessage = JsonStrings.quote(message);
+            String json = "{\"text\": " + quotedMessage + ", \"content\": " + quotedMessage + "}";
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(WEBHOOK_URL))

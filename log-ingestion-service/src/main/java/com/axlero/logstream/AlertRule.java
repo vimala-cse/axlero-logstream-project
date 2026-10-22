@@ -47,11 +47,11 @@ public class AlertRule {
     }
 
     public String toJson() {
-        return "{\"id\": \"" + id + "\""
-                + ", \"service\": \"" + service + "\""
-                + ", \"level\": \"" + level + "\""
+        return "{\"id\": " + JsonStrings.quote(id)
+                + ", \"service\": " + JsonStrings.quote(service)
+                + ", \"level\": " + JsonStrings.quote(level)
                 + ", \"threshold\": " + threshold
                 + ", \"windowMinutes\": " + windowMinutes
-                + ", \"description\": \"" + describe() + "\"}";
+                + ", \"description\": " + JsonStrings.quote(describe()) + "}";
     }
 }
