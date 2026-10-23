@@ -3,6 +3,7 @@ package com.axlero.logstream;
 import com.axlero.logstream.grpc.*;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
 public class LogIngestionServer {
@@ -39,6 +40,18 @@ public class LogIngestionServer {
 
         @Override
         public void sendLog(LogEntry request, StreamObserver<LogAck> responseObserver) {
+            if (request.getServiceName().isBlank() || request.getLevel().isBlank() || request.getMessage().isBlank()) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                        .withDescription("service_name, level, and message must not be blank")
+                        .asRuntimeException());
+                return;
+            }
+            if (request.hasResponseTimeMs() && request.getResponseTimeMs() < 0) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                        .withDescription("response_time_ms must not be negative")
+                        .asRuntimeException());
+                return;
+            }
             String responseTimeSuffix = request.hasResponseTimeMs()
                     ? " (response_time: " + request.getResponseTimeMs() + " ms)" : "";
             String formattedLine = "[" + request.getLevel() + "] "
