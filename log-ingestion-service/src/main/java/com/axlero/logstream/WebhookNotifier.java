@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 
 // Sends a real notification outside the dashboard when an alert
 // fires, instead of only showing it in the UI.
@@ -19,7 +20,9 @@ import java.net.http.HttpResponse;
 public class WebhookNotifier {
 
     private static final String WEBHOOK_URL = System.getenv("ALERT_WEBHOOK_URL");
-    private static final HttpClient client = HttpClient.newHttpClient();
+    private static final HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
 
     public static void send(String message) {
         if (WEBHOOK_URL == null || WEBHOOK_URL.isBlank()) {
@@ -31,6 +34,7 @@ public class WebhookNotifier {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(WEBHOOK_URL))
+                    .timeout(Duration.ofSeconds(5))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(json))
                     .build();
@@ -38,6 +42,11 @@ public class WebhookNotifier {
             // Fire-and-forget: we don't want a slow or down webhook to
             // block log ingestion or the alert-checking loop.
             client.sendAsync(request, HttpResponse.BodyHandlers.discarding())
+                    .thenAccept(response -> {
+                        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                            System.out.println("Webhook returned HTTP " + response.statusCode());
+                        }
+                    })
                     .exceptionally(e -> {
                         System.out.println("Webhook send failed: " + e.getMessage());
                         return null;
