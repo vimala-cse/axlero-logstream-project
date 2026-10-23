@@ -66,7 +66,16 @@ public class LiveTailWebSocketServer extends WebSocketServer {
     public void broadcast(String logLine) {
         for (WebSocket conn : connections) {
             if (conn.isOpen()) {
-                conn.send(logLine);
+                try {
+                    conn.send(logLine);
+                } catch (RuntimeException e) {
+                    connections.remove(conn);
+                    try {
+                        conn.close();
+                    } catch (RuntimeException ignored) {
+                        // The connection is already removed from broadcasts.
+                    }
+                }
             }
         }
     }
