@@ -44,14 +44,15 @@ public class RuleAlertHistory {
             String[] e = entries.get(i);
             String who = "*".equals(e[2]) ? "any service" : e[2];
             sb.append("{\"time\": ").append(e[0])
-              .append(", \"ruleId\": \"").append(e[1]).append("\"")
-              .append(", \"service\": \"").append(e[2]).append("\"")
-              .append(", \"level\": \"").append(e[3]).append("\"")
+              .append(", \"ruleId\": ").append(JsonStrings.quote(e[1]))
+              .append(", \"service\": ").append(JsonStrings.quote(e[2]))
+              .append(", \"level\": ").append(JsonStrings.quote(e[3]))
               .append(", \"threshold\": ").append(e[4])
               .append(", \"windowMinutes\": ").append(e[5])
               .append(", \"errorCount\": ").append(e[6])
-              .append(", \"message\": \"").append(e[6]).append(" ").append(e[3])
-              .append(" logs in ").append(e[5]).append(" min (").append(who).append(")\"}");
+              .append(", \"message\": ").append(JsonStrings.quote(
+                      e[6] + " " + e[3] + " logs in " + e[5] + " min (" + who + ")"))
+              .append("}");
         }
         sb.append("]");
         return sb.toString();
@@ -63,8 +64,8 @@ public class RuleAlertHistory {
         try {
             List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
             for (String line : lines) {
-                String[] parts = line.split(",");
-                if (parts.length == 7) entries.add(parts);
+                String[] parts = line.split(",", -1);
+                if (parts.length == 7 && isValidEntry(parts)) entries.add(parts);
             }
             // File is saved oldest-first; we keep newest-first in memory.
             Collections.reverse(entries);
@@ -72,6 +73,18 @@ public class RuleAlertHistory {
         }
     }
 
+    private boolean isValidEntry(String[] parts) {
+        try {
+            long time = Long.parseLong(parts[0]);
+            int threshold = Integer.parseInt(parts[4]);
+            int windowMinutes = Integer.parseInt(parts[5]);
+            int errorCount = Integer.parseInt(parts[6]);
+            return time >= 0 && threshold >= 1 && windowMinutes >= 1
+                    && windowMinutes <= 10_080 && errorCount >= 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
     private void save() {
         try (BufferedWriter writer = Files.newBufferedWriter(Path.of(FILE_NAME), StandardCharsets.UTF_8)) {
             List<String[]> oldestFirst = new ArrayList<>(entries);
