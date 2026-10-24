@@ -3,8 +3,10 @@ package com.axlero.logstream;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -61,12 +63,16 @@ public class AlertHistory {
         try {
             List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
             for (String line : lines) {
-                String[] parts = line.split(",");
-                if (parts.length == 2) {
-                    entries.add(new long[]{Long.parseLong(parts[0]), Long.parseLong(parts[1])});
+                String[] parts = line.split(",", -1);
+                if (parts.length != 2) continue;
+                try {
+                    long time = Long.parseLong(parts[0]);
+                    long errorCount = Long.parseLong(parts[1]);
+                    if (time >= 0 && errorCount >= 0) entries.add(new long[]{time, errorCount});
+                } catch (NumberFormatException ignored) {
+                    // Skip malformed rows and keep loading valid history entries.
                 }
-            }
-            // File is saved oldest-first; we keep newest-first in memory.
+            }            // File is saved oldest-first; we keep newest-first in memory.
             Collections.reverse(entries);
         } catch (IOException ignored) {
             // If the file is missing or unreadable, we just start fresh.
@@ -74,14 +80,33 @@ public class AlertHistory {
     }
 
     private void save() {
-        try (BufferedWriter writer = Files.newBufferedWriter(Path.of(FILE_NAME), StandardCharsets.UTF_8)) {
-            List<long[]> oldestFirst = new ArrayList<>(entries);
-            Collections.reverse(oldestFirst);
-            for (long[] e : oldestFirst) {
-                writer.write(e[0] + "," + e[1]);
-                writer.newLine();
+        Path target = Path.of(FILE_NAME).toAbsolutePath();
+        Path temporary = null;
+        try {
+            temporary = Files.createTempFile(target.getParent(), "alert-history-", ".tmp");
+            try (BufferedWriter writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                List<long[]> oldestFirst = new ArrayList<>(entries);
+                Collections.reverse(oldestFirst);
+                for (long[] e : oldestFirst) {
+                    writer.write(e[0] + "," + e[1]);
+                    writer.newLine();
+                }
             }
-        } catch (IOException ignored) {
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            System.out.println("Warning: failed to save alert history - " + e.getMessage());
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // A later save can replace a leftover temporary file.
+                }
+            }
         }
     }
 }
