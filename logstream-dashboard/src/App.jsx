@@ -84,7 +84,12 @@ export default function App() {
         fetch(`${API_BASE}/api/alert-rules/history`),
       ])
 
-      if (!aggRes.ok || !timelineRes.ok || !alertRes.ok || !historyRes.ok || !searchRes.ok || !rulesRes.ok || !ruleHistoryRes.ok) {
+      if (!searchRes.ok) {
+        const searchError = await searchRes.json().catch(() => ({}))
+        setError(searchError.error || 'Could not run this search query')
+        return
+      }
+      if (!aggRes.ok || !timelineRes.ok || !alertRes.ok || !historyRes.ok || !rulesRes.ok || !ruleHistoryRes.ok) {
         throw new Error('Backend did not return a valid response')
       }
 
