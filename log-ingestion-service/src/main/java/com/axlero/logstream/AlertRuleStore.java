@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 // Holds every user-defined alert rule, in memory, and saves them to a
@@ -29,14 +30,23 @@ public class AlertRuleStore {
         return rules;
     }
 
-    public AlertRule add(String service, String level, int threshold, int windowMinutes) {
-        String id = "r" + System.currentTimeMillis();
-        AlertRule rule = new AlertRule(id, service, level, threshold, windowMinutes);
+    public synchronized AlertRule add(String service, String level, int threshold, int windowMinutes) {
+        AlertRule candidate = new AlertRule("pending", service, level, threshold, windowMinutes);
+        for (AlertRule existing : rules) {
+            if (existing.service.equals(candidate.service)
+                    && existing.level.equals(candidate.level)
+                    && existing.threshold == candidate.threshold
+                    && existing.windowMinutes == candidate.windowMinutes) {
+                return null;
+            }
+        }
+
+        AlertRule rule = new AlertRule("r" + UUID.randomUUID(),
+                candidate.service, candidate.level, threshold, windowMinutes);
         rules.add(rule);
         save();
         return rule;
     }
-
     public boolean remove(String id) {
         boolean removed = rules.removeIf(r -> r.id.equals(id));
         if (removed) save();

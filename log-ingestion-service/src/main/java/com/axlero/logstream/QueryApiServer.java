@@ -222,7 +222,12 @@ public class QueryApiServer {
                         json = "{\"error\": " + jsonString(validationError) + "}";
                     } else {
                         AlertRule created = ruleStore.add(service, level, threshold, windowMinutes);
-                        json = created.toJson();
+                        if (created == null) {
+                            statusCode = 409;
+                            json = "{\"error\": " + jsonString("An identical alert rule already exists") + "}";
+                        } else {
+                            json = created.toJson();
+                        }
                     }
                 } else if (method.equals("DELETE")) {
                     String id = getQueryParam(exchange, "id");
