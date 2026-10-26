@@ -180,18 +180,54 @@ export default function App() {
     }
 
     setLiveLogs([])
-    const ws = new WebSocket(WS_BASE)
-    wsRef.current = ws
+    let disposed = false
+    let retryTimer = null
+    let retryDelay = 1000
+    let socket = null
 
-    ws.onopen = () => setLiveConnected(true)
-    ws.onmessage = (event) => {
-      setLiveLogs((prev) => [event.data, ...prev].slice(0, 100))
+    const connect = () => {
+      if (disposed) return
+      const connection = new WebSocket(WS_BASE)
+      socket = connection
+      wsRef.current = connection
+
+      connection.onopen = () => {
+        if (disposed) {
+          connection.close()
+          return
+        }
+        retryDelay = 1000
+        setLiveConnected(true)
+      }
+      connection.onmessage = (event) => {
+        if (!disposed) setLiveLogs((prev) => [event.data, ...prev].slice(0, 100))
+      }
+      connection.onerror = () => {
+        if (!disposed) {
+          setLiveConnected(false)
+          connection.close()
+        }
+      }
+      connection.onclose = () => {
+        if (wsRef.current === connection) wsRef.current = null
+        if (disposed) return
+        setLiveConnected(false)
+        retryTimer = window.setTimeout(connect, retryDelay)
+        retryDelay = Math.min(retryDelay * 2, 30000)
+      }
     }
-    ws.onerror = () => setLiveConnected(false)
-    ws.onclose = () => setLiveConnected(false)
 
+    connect()
     return () => {
-      ws.close()
+      disposed = true
+      window.clearTimeout(retryTimer)
+      const activeSocket = socket
+      socket = null
+      wsRef.current = null
+      if (activeSocket) {
+        activeSocket.onclose = null
+        activeSocket.close()
+      }
       setLiveConnected(false)
     }
   }, [activeTab])
