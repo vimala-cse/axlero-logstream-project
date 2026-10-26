@@ -277,19 +277,20 @@ export default function App() {
           </div>
         </div>
 
-        <div className="tabs">
+        <nav className="tabs" aria-label="Dashboard sections">
           {['Overview', 'Logs', 'Analytics', 'Alerts', 'Services', 'Live Tail'].map((tab) => (
-              <div
-                  key={tab}
-                  className={`tab ${activeTab === tab ? 'active' : ''}`}
-                  onClick={() => setActiveTab(tab)}
-              >
-                <Icon name={TAB_ICON[tab]} size={14} />
-                <span>{tab}</span>
-              </div>
+            <button
+              key={tab}
+              type="button"
+              className={`tab ${activeTab === tab ? 'active' : ''}`}
+              aria-current={activeTab === tab ? 'page' : undefined}
+              onClick={() => setActiveTab(tab)}
+            >
+              <Icon name={TAB_ICON[tab]} size={14} />
+              <span>{tab}</span>
+            </button>
           ))}
-        </div>
-
+        </nav>
         {error && activeTab !== 'Live Tail' && <div className="error-banner">{error}</div>}
 
         {(activeTab === 'Overview' || activeTab === 'Logs') && (
