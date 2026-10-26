@@ -209,7 +209,7 @@ export default function App() {
   }
 
   function parseLogLine(line) {
-    const match = line.match(/^\[(\w+)\]\s+([\w-]+):\s+(.*?)(?:\s+\(response_time:\s+(\d+) ms\))?\s+\(time:\s+(\d+)\)$/)
+    const match = line.match(/^\[(\w+)\]\s+([\w.-]+):\s+(.*?)(?:\s+\(response_time:\s+(\d+) ms\))?\s+\(time:\s+(\d+)\)$/)
     if (!match) return { level: 'INFO', service: '-', message: line, responseTimeMs: null, time: null }
     const [, level, service, message, responseTimeMs, time] = match
     return {
