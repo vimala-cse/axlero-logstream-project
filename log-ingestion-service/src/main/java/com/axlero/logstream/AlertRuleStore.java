@@ -27,7 +27,7 @@ public class AlertRuleStore {
     }
 
     public List<AlertRule> getRules() {
-        return rules;
+        return List.copyOf(rules);
     }
 
     public synchronized AlertRule add(String service, String level, int threshold, int windowMinutes) {
