@@ -309,18 +309,18 @@ export default function App() {
               </div>
               <div className="query-hint">
                 <span className="hint-label">try</span>
-                <span className="hint-chip mono" onClick={() => { setQuery('message:timeout'); loadAll('message:timeout') }}>
+                <button type="button" className="hint-chip mono" onClick={() => { setQuery('message:timeout'); loadAll('message:timeout') }}>
               message:timeout
-            </span>
-                <span className="hint-chip mono" onClick={() => { setQuery('service:payment-service'); loadAll('service:payment-service') }}>
+            </button>
+                <button type="button" className="hint-chip mono" onClick={() => { setQuery('service:payment-service'); loadAll('service:payment-service') }}>
               service:payment-service
-            </span>
-                <span className="hint-chip mono" onClick={() => { setQuery('response_time > 1000'); loadAll('response_time > 1000') }}>
+            </button>
+                <button type="button" className="hint-chip mono" onClick={() => { setQuery('response_time > 1000'); loadAll('response_time > 1000') }}>
               response_time &gt; 1000
-            </span>
-                <span className="hint-chip mono" onClick={() => { setQuery('level:WARN'); loadAll('level:WARN') }}>
+            </button>
+                <button type="button" className="hint-chip mono" onClick={() => { setQuery('level:WARN'); loadAll('level:WARN') }}>
               level:WARN
-            </span>
+            </button>
               </div>
             </div>
         )}
