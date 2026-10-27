@@ -39,14 +39,14 @@ npm run build
 
 ## Backend addresses
 
-The local backend addresses are set near the top of `src/App.jsx`:
+The dashboard defaults to the local backend addresses. To use a different backend, create a `.env.local` file in this directory:
 
-```js
-const API_BASE = 'http://localhost:8080'
-const WS_BASE = 'ws://localhost:8081'
+```dotenv
+VITE_API_BASE_URL=http://localhost:8080
+VITE_WS_BASE_URL=ws://localhost:8081
 ```
 
-Update both values if the backend runs at different addresses. The backend REST server must allow the dashboard origin through CORS.
+Change the values to match your REST API and Live Tail WebSocket hosts. Restart the Vite development server after editing the file. The backend REST server must allow the dashboard origin through CORS. Do not put secrets in Vite environment variables because values prefixed with `VITE_` are included in the browser bundle.
 
 ## Project files
 

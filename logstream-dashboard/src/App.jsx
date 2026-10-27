@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
 // Change these if your backend runs somewhere else.
-const API_BASE = 'http://localhost:8080'   // QueryApiServer (REST)
-const WS_BASE = 'ws://localhost:8081'      // LiveTailWebSocketServer (Live Tail)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'   // QueryApiServer (REST)
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8081'      // LiveTailWebSocketServer (Live Tail)
 
 function timeAgoLabel(epochMillis) {
   const d = new Date(epochMillis)
