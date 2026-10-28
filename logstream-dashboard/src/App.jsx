@@ -65,12 +65,14 @@ export default function App() {
   const [liveLogs, setLiveLogs] = useState([])
   const [liveConnected, setLiveConnected] = useState(false)
   const wsRef = useRef(null)
+  const loadRequestIdRef = useRef(0)
 
   const [query, setQuery] = useState('level:ERROR')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   async function loadAll(searchQuery) {
+    const requestId = ++loadRequestIdRef.current
     setLoading(true)
     setError(null)
     try {
@@ -83,6 +85,8 @@ export default function App() {
         fetch(`${API_BASE}/api/alert-rules`),
         fetch(`${API_BASE}/api/alert-rules/history`),
       ])
+
+      if (requestId !== loadRequestIdRef.current) return
 
       if (!searchRes.ok) {
         const searchError = await searchRes.json().catch(() => ({}))
@@ -101,11 +105,11 @@ export default function App() {
       setRules(await rulesRes.json())
       setRuleHistory(await ruleHistoryRes.json())
     } catch (err) {
-      setError(
+      if (requestId === loadRequestIdRef.current) setError(
           'Could not reach the backend. Is QueryApiServer running on localhost:8080?'
       )
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestIdRef.current) setLoading(false)
     }
   }
 
