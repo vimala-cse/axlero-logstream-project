@@ -291,7 +291,7 @@ export default function App() {
             </button>
           ))}
         </nav>
-        {error && activeTab !== 'Live Tail' && <div className="error-banner">{error}</div>}
+        {error && activeTab !== 'Live Tail' && <div className="error-banner" role="alert">{error}</div>}
 
         {(activeTab === 'Overview' || activeTab === 'Logs') && (
             <div className="hero">
@@ -513,7 +513,7 @@ export default function App() {
                   {ruleSaving ? 'Adding...' : 'Add rule'}
                 </button>
               </form>
-              {ruleError && <div className="error-banner" style={{ marginTop: 12 }}>{ruleError}</div>}
+              {ruleError && <div className="error-banner" role="alert" style={{ marginTop: 12 }}>{ruleError}</div>}
 
               <div className="section-title" style={{ marginTop: 26 }}>Rule alert history</div>
               {ruleHistory.length === 0 ? (
