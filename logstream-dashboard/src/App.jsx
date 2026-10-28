@@ -458,8 +458,9 @@ export default function App() {
 
               <form className="rule-form" onSubmit={createRule}>
                 <div className="rule-field">
-                  <label>Service</label>
+                  <label htmlFor="rule-service">Service</label>
                   <select
+                      id="rule-service"
                       value={newRule.service}
                       onChange={(e) => setNewRule({ ...newRule, service: e.target.value })}
                   >
@@ -470,8 +471,9 @@ export default function App() {
                   </select>
                 </div>
                 <div className="rule-field">
-                  <label>Level</label>
+                  <label htmlFor="rule-level">Level</label>
                   <select
+                      id="rule-level"
                       value={newRule.level}
                       onChange={(e) => setNewRule({ ...newRule, level: e.target.value })}
                   >
@@ -481,8 +483,9 @@ export default function App() {
                   </select>
                 </div>
                 <div className="rule-field">
-                  <label>More than</label>
+                  <label htmlFor="rule-threshold">More than</label>
                   <input
+                      id="rule-threshold"
                       type="number"
                       min="1"
                       step="1"
@@ -493,8 +496,9 @@ export default function App() {
                   />
                 </div>
                 <div className="rule-field">
-                  <label>In last (min)</label>
+                  <label htmlFor="rule-window">In last (min)</label>
                   <input
+                      id="rule-window"
                       type="number"
                       min="1"
                       step="1"
